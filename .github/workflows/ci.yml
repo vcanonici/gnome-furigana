@@ -1,0 +1,32 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    env:
+      NX_DAEMON: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.1
+      - name: System tools (schemas, shellcheck, zip)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libglib2.0-bin shellcheck zip
+      - name: Rust toolchain (pinned by service/rust-toolchain.toml)
+        run: rustup show active-toolchain
+        working-directory: service
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: service
+      - run: npm ci
+      - name: lint, test, build
+        run: node ci/cli.mjs run --full

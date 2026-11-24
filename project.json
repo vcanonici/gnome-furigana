@@ -1,0 +1,42 @@
+{
+  "name": "gnome-furigana",
+  "root": ".",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "parallel": false,
+        "commands": [
+          "npx tsc -p extension/tsconfig.json --noEmit",
+          "npx eslint extension",
+          "cargo fmt --manifest-path service/Cargo.toml --check",
+          "cargo clippy --quiet --manifest-path service/Cargo.toml --all-targets --locked -- -D warnings",
+          "shellcheck install.sh uninstall.sh packaging/stage-release.sh tests/shell/run-acceptance.sh",
+          "glib-compile-schemas --strict --dry-run extension/schemas",
+          "npm run lint:ci"
+        ]
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "parallel": false,
+        "commands": [
+          "npx tsc -p extension/tsconfig.test.json && node --test build/extension-test/test/*.test.js",
+          "cargo test --quiet --manifest-path service/Cargo.toml --locked",
+          "node --test ci/*.test.mjs"
+        ]
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "parallel": false,
+        "commands": [
+          "node extension/scripts/packageExtension.mjs",
+          "cargo build --quiet --release --manifest-path service/Cargo.toml --locked"
+        ]
+      }
+    }
+  }
+}

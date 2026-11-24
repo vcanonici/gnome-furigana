@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=io.github.vcanonici.Furigana
+Exec=@BINDIR@/gnome-furigana serve
+SystemdService=gnome-furigana.service

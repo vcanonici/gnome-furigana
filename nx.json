@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "namedInputs": {
+    "default": [
+      "{projectRoot}/**/*",
+      "!{projectRoot}/build/**/*",
+      "!{projectRoot}/dist/**/*",
+      "!{projectRoot}/service/target/**/*",
+      {
+        "runtime": "node --version"
+      },
+      {
+        "runtime": "cargo --version"
+      }
+    ]
+  },
+  "targetDefaults": {
+    "lint": {
+      "cache": true,
+      "inputs": [
+        "default"
+      ]
+    },
+    "test": {
+      "cache": true,
+      "inputs": [
+        "default"
+      ]
+    },
+    "build": {
+      "cache": true,
+      "inputs": [
+        "default"
+      ]
+    }
+  }
+}

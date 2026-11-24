@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Single configuration contract shared by the Shell extension, the Settings panel
+     and the linguistic service. Keep keys stable; add new ones instead of renaming. -->
+<schemalist gettext-domain="gnome-furigana">
+  <enum id="io.github.vcanonici.Furigana.DisplayForm">
+    <value nick="ruby" value="0"/>
+    <value nick="inline" value="1"/>
+  </enum>
+  <enum id="io.github.vcanonici.Furigana.Annotate">
+    <value nick="all" value="0"/>
+    <value nick="off" value="1"/>
+  </enum>
+  <enum id="io.github.vcanonici.Furigana.HoverScope">
+    <value nick="word" value="0"/>
+    <value nick="label" value="1"/>
+  </enum>
+
+  <schema id="org.gnome.shell.extensions.furigana" path="/org/gnome/shell/extensions/furigana/">
+    <key name="display-form" enum="io.github.vcanonici.Furigana.DisplayForm">
+      <default>'ruby'</default>
+      <summary>Forma de exibição</summary>
+      <description>ruby: leitura acima do kanji; inline: 漢字(かんじ).</description>
+    </key>
+    <key name="annotate" enum="io.github.vcanonici.Furigana.Annotate">
+      <default>'all'</default>
+      <summary>Política de anotação</summary>
+      <description>all: anotar todas as palavras com kanji; off: não alterar a interface (hover continua ativo).</description>
+    </key>
+    <key name="hover-enabled" type="b">
+      <default>true</default>
+      <summary>Tradução ao passar o mouse</summary>
+    </key>
+    <key name="hover-delay-ms" type="u">
+      <range min="300" max="10000"/>
+      <default>2000</default>
+      <summary>Tempo de permanência antes da tradução (ms)</summary>
+    </key>
+    <key name="hover-scope" enum="io.github.vcanonici.Furigana.HoverScope">
+      <default>'word'</default>
+      <summary>Alvo do hover</summary>
+      <description>word: palavra sob o cursor; label: rótulo inteiro.</description>
+    </key>
+    <key name="min-scale" type="d">
+      <range min="0.5" max="1.0"/>
+      <default>0.8</default>
+      <summary>Escala mínima do furigana antes do fallback inline</summary>
+    </key>
+    <key name="component-quick-settings" type="b">
+      <default>true</default>
+      <summary>Anotar o menu de configurações rápidas</summary>
+    </key>
+    <key name="component-panel" type="b">
+      <default>true</default>
+      <summary>Anotar a barra superior</summary>
+    </key>
+  </schema>
+</schemalist>

@@ -1,0 +1,20 @@
+# systemd --user unit for the gnome-furigana linguistic service.
+# Started on demand through D-Bus activation; installed by install.sh.
+[Unit]
+Description=gnome-furigana linguistic service (furigana and pt-BR meanings)
+PartOf=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=io.github.vcanonici.Furigana
+ExecStart=@BINDIR@/gnome-furigana serve
+Restart=on-failure
+RestartSec=2
+# Defence in depth: the service only reads its data and answers on the session bus.
+# PrivateNetwork= needs namespaces a user manager cannot create on Ubuntu 24.04;
+# seccomp works unprivileged, so network sockets are refused at the syscall level.
+RestrictAddressFamilies=AF_UNIX
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+MemoryMax=256M

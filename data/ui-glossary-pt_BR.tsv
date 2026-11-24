@@ -1,0 +1,147 @@
+# gnome-furigana — glossário curado de interface ja → pt-BR
+# Colunas (TAB): termo (forma de dicionário)	leitura (hiragana)	glosa pt-BR (sentidos separados por ";")	classe
+# Entradas com várias palavras são expressões completas de UI e têm prioridade sobre a soma das partes.
+# Fonte: vocabulário dos catálogos japoneses do GNOME Shell 46 (Ubuntu 24.04), revisado manualmente.
+設定	せってい	configurações; definir	substantivo
+電源	でんげん	energia elétrica; alimentação	substantivo
+切る	きる	desligar; cortar	verbo
+日本語	にほんご	língua japonesa	substantivo
+睡眠	すいみん	sono	substantivo
+評価	ひょうか	avaliação	substantivo
+今日	きょう	hoje	substantivo
+昨日	きのう	ontem	substantivo
+明日	あした	amanhã	substantivo
+食べる	たべる	comer	verbo
+行く	いく	ir	verbo
+銀行	ぎんこう	banco (instituição financeira)	substantivo
+拡張機能	かくちょうきのう	extensão (complemento)	substantivo
+機能	きのう	função; recurso	substantivo
+表示	ひょうじ	exibição; mostrar	substantivo
+非表示	ひひょうじ	ocultar; não exibido	substantivo
+開く	ひらく	abrir	verbo
+閉じる	とじる	fechar	verbo
+新しい	あたらしい	novo	adjetivo
+画面	がめん	tela	substantivo
+接続	せつぞく	conexão; conectar	substantivo
+切断	せつだん	desconexão; desconectar	substantivo
+留める	とめる	fixar; prender	verbo
+使用	しよう	uso; usar	substantivo
+切り替える	きりかえる	alternar; trocar	verbo
+再起動	さいきどう	reiniciar	substantivo
+起動	きどう	iniciar; inicialização	substantivo
+無効	むこう	desativado; inválido	substantivo
+無効化	むこうか	desativar	substantivo
+有効	ゆうこう	ativado; válido	substantivo
+一覧	いちらん	lista	substantivo
+必要	ひつよう	necessário	substantivo
+認証	にんしょう	autenticação	substantivo
+情報	じょうほう	informações	substantivo
+押す	おす	pressionar; apertar	verbo
+指定	してい	especificar; designar	substantivo
+終了	しゅうりょう	encerrar; sair	substantivo
+実行	じっこう	executar	substantivo
+通知	つうち	notificação	substantivo
+移動	いどう	mover	substantivo
+失敗	しっぱい	falha	substantivo
+詳細	しょうさい	detalhes	substantivo
+現在	げんざい	atual; agora	substantivo
+場合	ばあい	caso; situação	substantivo
+検索	けんさく	pesquisa; pesquisar	substantivo
+読み込む	よみこむ	carregar (dados)	verbo
+許可	きょか	permissão; permitir	substantivo
+可能	かのう	possível	substantivo
+選択	せんたく	seleção; selecionar	substantivo
+解除	かいじょ	cancelar; liberar	substantivo
+不明	ふめい	desconhecido	substantivo
+説明	せつめい	descrição; explicação	substantivo
+既に	すでに	já	advérbio
+変更	へんこう	alteração; alterar	substantivo
+問題	もんだい	problema	substantivo
+作成	さくせい	criar; criação	substantivo
+強制	きょうせい	forçar	substantivo
+停止	ていし	parar; interromper	substantivo
+入力	にゅうりょく	entrada (de dados); digitar	substantivo
+出力	しゅつりょく	saída	substantivo
+追加	ついか	adicionar	substantivo
+位置	いち	posição; localização	substantivo
+影響	えいきょう	efeito; impacto	substantivo
+削除	さくじょ	excluir; apagar	substantivo
+状態	じょうたい	estado; status	substantivo
+名前	なまえ	nome	substantivo
+固定	こてい	fixo; fixar	substantivo
+自動的	じどうてき	automático	adjetivo
+自動	じどう	automático	substantivo
+要求	ようきゅう	solicitação; exigir	substantivo
+発生	はっせい	ocorrência; ocorrer	substantivo
+回転	かいてん	rotação; girar	substantivo
+撮影	さつえい	captura (foto/vídeo)	substantivo
+撮る	とる	tirar (foto); capturar	verbo
+利用	りよう	utilização; usar	substantivo
+取得	しゅとく	obter	substantivo
+保存	ほぞん	salvar	substantivo
+一度	いちど	uma vez	substantivo
+安全	あんぜん	segurança; seguro	substantivo
+記録	きろく	registro; gravar	substantivo
+最後	さいご	último; final	substantivo
+動作	どうさ	funcionamento; operação	substantivo
+次回	じかい	próxima vez	substantivo
+準備	じゅんび	preparação	substantivo
+時計	とけい	relógio	substantivo
+世界	せかい	mundo	substantivo
+可能性	かのうせい	possibilidade	substantivo
+拒否	きょひ	recusar; negar	substantivo
+検出	けんしゅつ	detectar	substantivo
+互換性	ごかんせい	compatibilidade	substantivo
+対話	たいわ	diálogo; interação	substantivo
+存在	そんざい	existir; existência	substantivo
+文字	もじ	caractere; letra	substantivo
+場所	ばしょ	local; localização	substantivo
+複数	ふくすう	vários; múltiplos	substantivo
+上書き	うわがき	sobrescrever	substantivo
+暗号化	あんごうか	criptografia; criptografar	substantivo
+記憶	きおく	memorizar; lembrar	substantivo
+戻す	もどす	restaurar; voltar	verbo
+試す	ためす	tentar; testar	verbo
+有線	ゆうせん	cabeado (rede com fio)	substantivo
+更新	こうしん	atualização; atualizar	substantivo
+時間	じかん	tempo; horas	substantivo
+確認	かくにん	confirmar; verificar	substantivo
+外す	はずす	remover; desafixar	verbo
+指紋	しもん	impressão digital	substantivo
+管理者	かんりしゃ	administrador	substantivo
+明るさ	あかるさ	brilho	substantivo
+消去	しょうきょ	limpar; apagar	substantivo
+形式	けいしき	formato	substantivo
+外付け	そとづけ	externo (dispositivo)	substantivo
+操作	そうさ	operação; operar	substantivo
+気象	きしょう	tempo (meteorologia)	substantivo
+天気	てんき	tempo; clima	substantivo
+履歴	りれき	histórico	substantivo
+音量	おんりょう	volume	substantivo
+夜間	やかん	noturno; noite	substantivo
+機内	きない	a bordo (avião)	substantivo
+省電力	しょうでんりょく	economia de energia	substantivo
+電池	でんち	bateria	substantivo
+充電	じゅうでん	carregamento (bateria)	substantivo
+共有	きょうゆう	compartilhar	substantivo
+録画	ろくが	gravação de tela	substantivo
+画像	がぞう	imagem	substantivo
+音声	おんせい	áudio; voz	substantivo
+言語	げんご	idioma	substantivo
+入力ソース	にゅうりょくそーす	fonte de entrada (teclado)	substantivo
+日付	ひづけ	data	substantivo
+時刻	じこく	horário	substantivo
+予定	よてい	compromisso; agenda	substantivo
+予定なし	よていなし	sem compromissos	expressão
+休止	きゅうし	pausa; suspensão	substantivo
+電源オフ	でんげんおふ	desligar	expressão
+電源を切る	でんげんをきる	desligar (o computador)	expressão
+睡眠の評価	すいみんのひょうか	avaliação do sono	expressão
+夜間モード	やかんもーど	luz noturna	expressão
+機内モード	きないもーど	modo avião	expressão
+電源モード	でんげんもーど	modo de energia	expressão
+通知を非表示	つうちをひひょうじ	não perturbe (ocultar notificações)	expressão
+ユーザーを切り替え	ゆーざーをきりかえ	trocar de usuário	expressão
+アプリを表示	あぷりをひょうじ	mostrar aplicativos	expressão
+画面ロック	がめんろっく	bloqueio de tela	expressão
+ロック解除	ろっくかいじょ	desbloquear	expressão

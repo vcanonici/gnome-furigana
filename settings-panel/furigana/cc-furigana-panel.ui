@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- gnome-furigana panel layout. SPDX-License-Identifier: GPL-2.0-or-later -->
+<interface>
+  <template class="CcFuriganaPanel" parent="CcPanel">
+    <property name="child">
+      <object class="AdwToolbarView">
+        <child type="top">
+          <object class="AdwHeaderBar"/>
+        </child>
+        <property name="content">
+          <object class="GtkStack" id="stack">
+            <child>
+              <object class="GtkStackPage">
+                <property name="name">missing</property>
+                <property name="child">
+                  <object class="AdwStatusPage">
+                    <property name="icon-name">accessories-dictionary-symbolic</property>
+                    <property name="title">Furigana não está instalado</property>
+                    <property name="description">Instale com: curl -fsSL https://raw.githubusercontent.com/vcanonici/gnome-furigana/main/install.sh | bash</property>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStackPage">
+                <property name="name">settings</property>
+                <property name="child">
+                  <object class="AdwPreferencesPage">
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title">Furigana</property>
+                        <property name="description">Leitura em hiragana sobre os kanji da interface do GNOME Shell.</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="annotate_row">
+                            <property name="title">Mostrar furigana</property>
+                            <property name="subtitle">Desligado, a interface fica intacta e só a tradução por hover continua</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwComboRow" id="form_row">
+                            <property name="title">Forma</property>
+                            <property name="model">
+                              <object class="GtkStringList">
+                                <items>
+                                  <item>Acima do kanji</item>
+                                  <item>漢字(かんじ)</item>
+                                </items>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSpinRow" id="scale_row">
+                            <property name="title">Escala mínima do furigana</property>
+                            <property name="subtitle">Abaixo disso, usar a forma entre parênteses</property>
+                            <property name="digits">2</property>
+                            <property name="adjustment">
+                              <object class="GtkAdjustment">
+                                <property name="lower">0.5</property>
+                                <property name="upper">1.0</property>
+                                <property name="step-increment">0.05</property>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title">Tradução para português</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="hover_row">
+                            <property name="title">Traduzir ao parar o mouse</property>
+                            <property name="subtitle">Cartão com palavra, leitura e significado</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSpinRow" id="delay_row">
+                            <property name="title">Tempo até a tradução</property>
+                            <property name="subtitle">Segundos com o cursor sobre a mesma palavra</property>
+                            <property name="digits">1</property>
+                            <property name="adjustment">
+                              <object class="GtkAdjustment">
+                                <property name="lower">0.3</property>
+                                <property name="upper">10</property>
+                                <property name="step-increment">0.1</property>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwComboRow" id="scope_row">
+                            <property name="title">Alvo</property>
+                            <property name="model">
+                              <object class="GtkStringList">
+                                <items>
+                                  <item>Palavra sob o cursor</item>
+                                  <item>Rótulo inteiro</item>
+                                </items>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title">Onde anotar</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="quick_settings_row">
+                            <property name="title">Configurações rápidas</property>
+                            <property name="subtitle">Menu do canto superior direito</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSwitchRow" id="panel_row">
+                            <property name="title">Barra superior</property>
+                            <property name="subtitle">Relógio e indicadores</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title">Serviço e vocabulário</property>
+                        <child>
+                          <object class="AdwActionRow" id="service_row">
+                            <property name="title">Serviço linguístico</property>
+                            <property name="subtitle">Verificando…</property>
+                            <child type="suffix">
+                              <object class="GtkButton">
+                                <property name="icon-name">view-refresh-symbolic</property>
+                                <property name="valign">center</property>
+                                <property name="tooltip-text">Recarregar vocabulário</property>
+                                <signal name="clicked" handler="on_reload_clicked" object="CcFuriganaPanel" swapped="yes"/>
+                                <style><class name="flat"/></style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwActionRow">
+                            <property name="title">Meu vocabulário</property>
+                            <property name="subtitle">Correções de leitura e significado (overrides.tsv)</property>
+                            <property name="activatable">True</property>
+                            <signal name="activated" handler="on_edit_vocabulary_activated" object="CcFuriganaPanel" swapped="yes"/>
+                            <child type="suffix">
+                              <object class="GtkImage">
+                                <property name="icon-name">document-edit-symbolic</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <!-- AdwButtonRow needs libadwaita 1.6; Ubuntu 24.04 ships 1.5. -->
+                          <object class="AdwActionRow">
+                            <property name="title">Restaurar padrões</property>
+                            <property name="subtitle">Volta todas as opções acima aos valores iniciais</property>
+                            <property name="activatable">True</property>
+                            <signal name="activated" handler="on_reset_activated" object="CcFuriganaPanel" swapped="yes"/>
+                            <child type="suffix">
+                              <object class="GtkImage">
+                                <property name="icon-name">edit-undo-symbolic</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </child>
+          </object>
+        </property>
+      </object>
+    </property>
+  </template>
+</interface>

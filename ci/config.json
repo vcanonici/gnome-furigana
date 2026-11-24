@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "targets": ["lint", "test", "build"],
+  "description": "gnome-furigana: TypeScript extension, Rust service, installer scripts and GSettings schema."
+}

@@ -1,0 +1,6 @@
+{
+  "uuid": "unsafe-mode@furigana-tests",
+  "name": "gnome-furigana test harness",
+  "description": "TEST ONLY: enables Shell unsafe mode so scripted acceptance tests can use org.gnome.Shell.Eval. Never install on a real session.",
+  "shell-version": ["46"]
+}

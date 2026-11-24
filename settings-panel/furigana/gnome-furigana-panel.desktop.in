@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Furigana
+Comment=Leituras sobre os kanji e traduções pt-BR da interface
+Exec=gnome-control-center furigana
+Icon=accessories-dictionary-symbolic
+Terminal=false
+Type=Application
+NoDisplay=true
+StartupNotify=true
+Categories=GNOME;GTK;Settings;X-GNOME-Settings-Panel;X-GNOME-DetailsSettings;
+Keywords=Furigana;Kanji;Japanese;Japonês;Ruby;Tradução;ふりがな;
