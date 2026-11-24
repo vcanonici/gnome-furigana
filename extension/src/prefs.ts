@@ -54,10 +54,6 @@ export default class FuriganaPreferences extends ExtensionPreferences {
             delayRow(settings),
             choiceRow(settings, 'hover-scope', 'Alvo', [['word', 'Palavra sob o cursor'], ['label', 'Rótulo inteiro']]),
         ]));
-        page.add(group('Componentes do GNOME Shell', [
-            switchRow(settings, 'component-quick-settings', 'Configurações rápidas', 'Menu do canto superior direito'),
-            switchRow(settings, 'component-panel', 'Barra superior', 'Relógio e indicadores'),
-        ]));
         window.add(page);
     }
 }

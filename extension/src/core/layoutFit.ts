@@ -1,7 +1,8 @@
 /**
- * Fit policy (spec §8.3): prefer ruby above the label, shrink the ruby down to
- * `minScale`, then fall back to inline text, and finally omit the annotation
- * rather than truncating the original command.
+ * Fit policy: furigana above the kanji when there is room (shrinking down to
+ * `minScale`, then asking the component for a little extra room), otherwise the
+ * reading goes inline after the kanji — `漢字(かんじ)`. Never omitted: a label that
+ * grows or ellipsizes is better than kanji without a reading.
  */
 
 /** Geometry measured for one label, in logical pixels. */
@@ -12,10 +13,6 @@ export interface FitInput {
     extraRoom: number;
     /** Height of the ruby line at scale 1. */
     rubyHeight: number;
-    /** Width available to the label. */
-    availableWidth: number;
-    /** Natural width of the label when rendered inline (`漢字(かんじ)`). */
-    inlineWidth: number;
     /** Smallest ruby scale allowed (default 0.8). */
     minScale: number;
     /** User preference. */
@@ -25,8 +22,7 @@ export interface FitInput {
 /** What to render. */
 export type FitDecision =
     | {form: 'ruby'; scale: number; needsRoom: boolean}
-    | {form: 'inline'}
-    | {form: 'none'};
+    | {form: 'inline'};
 
 const SCALE_STEP = 0.05;
 // Ruby glyphs have internal leading; allow them to overlap the obstacle slightly.
@@ -42,15 +38,13 @@ function largestRubyScale(input: FitInput, space: number): number | null {
 
 /** Chooses the rendering for one label. Pure; unit-tested. */
 export function decideFit(input: FitInput): FitDecision {
-    const inlineFits = input.inlineWidth <= input.availableWidth;
     if (input.preferredForm === 'inline')
-        return inlineFits ? {form: 'inline'} : {form: 'none'};
+        return {form: 'inline'};
     const scale = largestRubyScale(input, input.spaceAbove);
     if (scale !== null)
         return {form: 'ruby', scale, needsRoom: false};
-    // Growing the component a little keeps furigana readable at full size.
     const roomyScale = input.extraRoom > 0 ? largestRubyScale(input, input.spaceAbove + input.extraRoom) : null;
     if (roomyScale !== null)
         return {form: 'ruby', scale: roomyScale, needsRoom: true};
-    return inlineFits ? {form: 'inline'} : {form: 'none'};
+    return {form: 'inline'};
 }

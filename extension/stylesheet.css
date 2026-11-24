@@ -1,6 +1,7 @@
-/* Room for furigana above a label inside a button (e.g. Quick Settings toggles).
-   Element + class outranks the theme's class-only rules. Value = ROOM_PX in annotatedLabel.ts. */
-StButton.furigana-room {
+/* Room for furigana above labels in Quick Settings toggles and menu items.
+   Two classes outrank the theme's single-class rules. Value = ROOM_PX in annotatedLabel.ts. */
+.quick-toggle.furigana-room,
+.popup-menu-item.furigana-room {
   padding-top: 10px;
 }
 

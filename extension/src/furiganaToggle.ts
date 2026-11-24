@@ -3,6 +3,8 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import type Clutter from 'gi://Clutter';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {QuickMenuToggle, SystemIndicator} from 'resource:///org/gnome/shell/ui/quickSettings.js';
 
@@ -70,7 +72,26 @@ function hasFuriganaPanel(): boolean {
     return GLib.file_test(marker, GLib.FileTest.EXISTS);
 }
 
-/** System indicator holding the toggle; add with `quickSettings.addExternalIndicator`. */
+// `Main.panel.statusArea` is typed `any` upstream; this is the only part we rely on.
+interface QuickSettingsButton {
+    addExternalIndicator(indicator: Clutter.Actor): void;
+}
+
+function isQuickSettingsButton(value: unknown): value is QuickSettingsButton {
+    return typeof value === 'object' && value !== null && 'addExternalIndicator' in value &&
+        typeof value.addExternalIndicator === 'function';
+}
+
+/** Adds the indicator to Quick Settings; false when the Shell 46 layout is not found. */
+export function addToQuickSettings(indicator: Clutter.Actor): boolean {
+    const candidate: unknown = Main.panel.statusArea.quickSettings;
+    if (!isQuickSettingsButton(candidate))
+        return false;
+    candidate.addExternalIndicator(indicator);
+    return true;
+}
+
+/** System indicator holding the toggle; add with `addToQuickSettings`. */
 export const FuriganaIndicator = GObject.registerClass(
 class FuriganaIndicator extends SystemIndicator {
     constructor(settings: Gio.Settings, openPreferences: () => void) {

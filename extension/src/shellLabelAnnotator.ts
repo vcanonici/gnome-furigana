@@ -1,8 +1,9 @@
 /**
- * Annotates the `St.Label`s under one root actor of a Shell component (the Quick
- * Settings menu, the top bar). Only labels are touched; editable text and other
- * actors are ignored by construction. Work happens only while the component is
- * active (e.g. its menu is open).
+ * Annotates every `St.Label` of the GNOME Shell UI (`Main.layoutManager.uiGroup`):
+ * top bar, all menus and Quick Settings, the Overview (app grid, dash, search, window
+ * captions), dialogs, notifications and the calendar. Only labels are touched;
+ * editable text (`St.Entry`) and our own actors are skipped. Unmapped subtrees are not
+ * walked, so hidden UI costs nothing.
  */
 
 import Clutter from 'gi://Clutter';
@@ -11,68 +12,52 @@ import Meta from 'gi://Meta';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {AnnotatedLabel, type LabelLayoutPolicy, type WordHit} from './annotatedLabel.js';
+import {AnnotatedLabel, type WordHit} from './annotatedLabel.js';
 import type {FuriganaPreferences} from './furiganaSettings.js';
 import type {HoverController} from './hoverController.js';
 import type {LinguisticClient} from './linguisticClient.js';
 
 // CJK ideographs incl. extension A, compatibility and 々; cheap pre-filter before D-Bus.
 const KANJI = /[㐀-䶿一-鿿豈-﫿々]|[\ud840-\ud87f][\udc00-\udfff]/u;
-// Menus add rows lazily (Wi-Fi networks, submenus); rescan while active.
+// Menus and the Overview add labels lazily; a periodic walk of mapped actors catches them.
 const RESCAN_INTERVAL_MS = 750;
+/** Name prefix of our own actors (overlay, tooltip), which must never be annotated. */
+export const OWN_ACTOR_PREFIX = 'furigana-';
+const SERVICE_CONTEXT = 'shell';
 
-/** Static description of one annotated Shell component. */
-export interface ComponentTarget {
-    /** Service context name, e.g. `quick-settings`. */
-    context: string;
-    /** Subtree whose labels are annotated. */
-    root: Clutter.Actor;
-    /** Actor whose captured events reveal pointer motion over the subtree. */
-    eventSource: Clutter.Actor;
-    /** How labels of this component may change their surroundings. */
-    layoutPolicy: LabelLayoutPolicy;
+// `Main.overview` is typed `any` upstream; these are the only calls we make on it.
+interface OverviewEvents {
+    connect(signal: 'showing', callback: () => void): number;
+    disconnect(id: number): void;
 }
+const overview = (): OverviewEvents => Main.overview as OverviewEvents;
 
-export class LabelTreeAnnotator {
-    private readonly overlay = new St.Widget({reactive: false, style_class: 'furigana-overlay'});
+export class ShellLabelAnnotator {
+    private readonly overlay = new St.Widget({name: `${OWN_ACTOR_PREFIX}overlay`, reactive: false});
     private readonly labels = new Map<St.Label, AnnotatedLabel>();
     private readonly destroySignals = new Map<St.Label, number>();
     private readonly eventSignal: number;
-    private rescanSource: number | null = null;
-    private laterId: number | null = null;
-    private isActive = false;
+    private readonly overviewSignal: number;
+    private readonly rescanSource: number;
+    private readonly laterId: number;
 
-    constructor(private readonly target: ComponentTarget, private readonly client: LinguisticClient,
-        private readonly hover: HoverController, private preferences: FuriganaPreferences) {
+    constructor(private readonly client: LinguisticClient, private readonly hover: HoverController,
+        private preferences: FuriganaPreferences) {
         Main.layoutManager.uiGroup.add_child(this.overlay);
-        this.eventSignal = target.eventSource.connect('captured-event', (_actor, event: Clutter.Event) => {
+        this.eventSignal = global.stage.connect('captured-event', (_actor, event: Clutter.Event) => {
             this.handleEvent(event);
             return Clutter.EVENT_PROPAGATE;
         });
-    }
-
-    /** Starts annotating (component became visible). */
-    activate(): void {
-        this.isActive = true;
-        Main.layoutManager.uiGroup.set_child_above_sibling(this.overlay, null);
-        this.overlay.show();
-        this.scan();
-        this.rescanSource ??= GLib.timeout_add(GLib.PRIORITY_LOW, RESCAN_INTERVAL_MS, () => {
+        this.overviewSignal = overview().connect('showing', () => { this.scan(); });
+        this.rescanSource = GLib.timeout_add(GLib.PRIORITY_LOW, RESCAN_INTERVAL_MS, () => {
             this.scan();
             return GLib.SOURCE_CONTINUE;
         });
-        this.laterId ??= global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
+        this.laterId = global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
             this.syncPositions();
             return GLib.SOURCE_CONTINUE;
         });
-    }
-
-    /** Stops work while the component is hidden; decorations are kept for the next open. */
-    deactivate(): void {
-        this.isActive = false;
-        this.hover.reset();
-        this.overlay.hide();
-        this.stopTimers();
+        this.scan();
     }
 
     /** Re-renders every label with new preferences. */
@@ -84,8 +69,10 @@ export class LabelTreeAnnotator {
 
     /** Removes all decorations, restores texts and disconnects (spec CA-F07). */
     destroy(): void {
-        this.stopTimers();
-        this.target.eventSource.disconnect(this.eventSignal);
+        GLib.source_remove(this.rescanSource);
+        global.compositor.get_laters().remove(this.laterId);
+        global.stage.disconnect(this.eventSignal);
+        overview().disconnect(this.overviewSignal);
         for (const [label, annotated] of this.labels) {
             annotated.destroy();
             label.disconnect(this.destroySignals.get(label) ?? 0);
@@ -95,21 +82,11 @@ export class LabelTreeAnnotator {
         this.overlay.destroy();
     }
 
-    private stopTimers(): void {
-        if (this.rescanSource !== null)
-            GLib.source_remove(this.rescanSource);
-        if (this.laterId !== null)
-            global.compositor.get_laters().remove(this.laterId);
-        this.rescanSource = null;
-        this.laterId = null;
-    }
-
     private scan(): void {
-        for (const label of findLabels(this.target.root)) {
+        for (const label of findMappedLabels(Main.layoutManager.uiGroup)) {
             if (this.labels.has(label) || !KANJI.test(label.text))
                 continue;
-            const annotated = new AnnotatedLabel(label, this.overlay, this.target.layoutPolicy,
-                changed => void this.annotate(changed));
+            const annotated = new AnnotatedLabel(label, this.overlay, changed => void this.annotate(changed));
             this.labels.set(label, annotated);
             this.destroySignals.set(label, label.connect('destroy', () => { this.forget(label); }));
             void this.annotate(annotated);
@@ -125,30 +102,31 @@ export class LabelTreeAnnotator {
 
     private async annotate(annotated: AnnotatedLabel): Promise<void> {
         const text = annotated.sourceText;
-        const analysis = KANJI.test(text) ? await this.client.analyze(text, this.target.context) : null;
+        const analysis = KANJI.test(text) ? await this.client.analyze(text, SERVICE_CONTEXT) : null;
         // The label may have changed or been destroyed while the call was in flight.
         if (this.labels.get(annotated.label) === annotated && annotated.sourceText === text)
             annotated.apply(analysis, this.preferences);
     }
 
     private syncPositions(): void {
-        this.overlay.opacity = this.target.root.get_paint_opacity();
+        // Menus and dialogs created after us are stacked above; furigana must stay on top.
+        const uiGroup = Main.layoutManager.uiGroup;
+        if (uiGroup.get_last_child() !== this.overlay)
+            uiGroup.set_child_above_sibling(this.overlay, null);
         for (const annotated of this.labels.values())
             annotated.syncPosition();
     }
 
     private handleEvent(event: Clutter.Event): void {
-        if (!this.isActive)
-            return;
         const type = event.type();
-        if (type === Clutter.EventType.LEAVE) {
-            // Typed non-null upstream, but null when the pointer leaves the stage.
-            const related = event.get_related() as Clutter.Actor | null;
-            if (related === null || !this.target.eventSource.contains(related))
-                this.hover.reset();
-        } else if (type === Clutter.EventType.MOTION) {
+        if (type === Clutter.EventType.MOTION) {
             const [x, y] = event.get_coords();
             this.hover.point(this.hitTest(x, y));
+        } else if (type === Clutter.EventType.LEAVE) {
+            // Typed non-null upstream, but null when the pointer leaves the stage.
+            const related = event.get_related() as Clutter.Actor | null;
+            if (related === null)
+                this.hover.reset();
         } else if (type === Clutter.EventType.BUTTON_PRESS || type === Clutter.EventType.KEY_PRESS) {
             this.hover.reset();
         }
@@ -164,12 +142,17 @@ export class LabelTreeAnnotator {
     }
 }
 
-/** Depth-first list of visible `St.Label`s; skips `St.Entry` subtrees (editable text). */
-function findLabels(root: Clutter.Actor): St.Label[] {
+/**
+ * Depth-first list of mapped `St.Label`s. Skips unmapped subtrees (hidden UI), editable
+ * text and our own actors.
+ */
+function findMappedLabels(root: Clutter.Actor): St.Label[] {
     const found: St.Label[] = [];
     const pending: Clutter.Actor[] = [root];
     for (let actor = pending.pop(); actor; actor = pending.pop()) {
-        if (actor instanceof St.Entry || !actor.visible)
+        // Typed as string upstream, but null for actors that were never named.
+        const name = actor.name as string | null;
+        if (!actor.mapped || actor instanceof St.Entry || name?.startsWith(OWN_ACTOR_PREFIX))
             continue;
         if (actor instanceof St.Label)
             found.push(actor);

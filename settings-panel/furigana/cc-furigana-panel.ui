@@ -105,24 +105,13 @@
                     </child>
                     <child>
                       <object class="AdwPreferencesGroup">
-                        <property name="title">Onde anotar</property>
-                        <child>
-                          <object class="AdwSwitchRow" id="quick_settings_row">
-                            <property name="title">Configurações rápidas</property>
-                            <property name="subtitle">Menu do canto superior direito</property>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="AdwSwitchRow" id="panel_row">
-                            <property name="title">Barra superior</property>
-                            <property name="subtitle">Relógio e indicadores</property>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="AdwPreferencesGroup">
                         <property name="title">Serviço e vocabulário</property>
+                        <child>
+                          <object class="AdwActionRow" id="apps_row">
+                            <property name="title">Apps do sistema</property>
+                            <property name="subtitle">Verificando…</property>
+                          </object>
+                        </child>
                         <child>
                           <object class="AdwActionRow" id="service_row">
                             <property name="title">Serviço linguístico</property>

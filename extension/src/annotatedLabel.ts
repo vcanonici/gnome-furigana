@@ -2,7 +2,8 @@
  * One Shell label under annotation. The original `St.Label` is never reparented and
  * stays reactive as before; furigana is drawn by separate non-reactive actors in an
  * overlay layer, so clicks, focus and accessibility are untouched (spec LAY-02).
- * Only the inline fallback changes the label's text, and `destroy()` restores it.
+ * The label's text changes only for the inline form, or to drop readings it already
+ * carried when ruby is drawn instead; `destroy()` restores it.
  */
 
 import type Clutter from 'gi://Clutter';
@@ -12,23 +13,15 @@ import type {Analysis, Token} from './core/protocol.js';
 import {decideFit, type FitDecision} from './core/layoutFit.js';
 import {codePointLength, inlineToOriginalPositions, rubySpans, tokenAt, type RubySpan} from './core/textOffsets.js';
 import type {FuriganaPreferences} from './furiganaSettings.js';
-import {enclosingButton, foregroundCss, naturalTextWidth, positionAt, scaledFontSize, spaceAbove, spanRect,
+import {canHostRoom, foregroundCss, layoutHost, positionAt, scaledFontSize, spaceAbove, spanRect,
     type StageRect} from './labelGeometry.js';
 
 const RUBY_FONT_FACTOR = 0.55;
 // Ruby glyph boxes include leading; lower them so the reading sits close to the kanji.
 const RUBY_DROP = 0.18;
-/** Style class adding `padding-top` to the enclosing button; must match stylesheet.css. */
+/** Style class adding `padding-top` to the layout host; must match stylesheet.css. */
 const ROOM_CLASS = 'furigana-room';
 const ROOM_PX = 10;
-
-/** What the owning component allows a label to do to its surroundings. */
-export interface LabelLayoutPolicy {
-    /** The label may become wider than its current allocation (e.g. the top bar clock). */
-    canGrowWidth: boolean;
-    /** The enclosing button may gain `ROOM_PX` of top padding to fit furigana. */
-    canAddRoom: boolean;
-}
 
 /** A word found under the pointer. */
 export interface WordHit {
@@ -44,23 +37,24 @@ export class AnnotatedLabel {
     readonly id = nextLabelId++;
     private originalText: string;
     private analysis: Analysis | null = null;
-    private decision: FitDecision = {form: 'none'};
+    private decision: FitDecision | null = null;
     private rubyActors: {span: RubySpan; actor: St.Label}[] = [];
-    private isApplyingInline = false;
+    private isApplyingText = false;
+    private isTextReplaced = false;
     private readonly textSignal: number;
-    private roomButton: St.Button | null = null;
+    private roomHost: St.Widget | null = null;
     private mappedSignal: number | null = null;
 
     constructor(readonly label: St.Label, private readonly overlay: Clutter.Actor,
-        private readonly layoutPolicy: LabelLayoutPolicy,
         private readonly onTextChanged: (label: AnnotatedLabel) => void) {
         this.originalText = label.text;
         this.textSignal = label.connect('notify::text', () => {
-            if (this.isApplyingInline)
+            if (this.isApplyingText)
                 return;
             // The Shell replaced the text: our decorations describe the old one.
             this.removeRuby();
-            this.decision = {form: 'none'};
+            this.decision = null;
+            this.isTextReplaced = false;
             this.originalText = label.text;
             this.onTextChanged(this);
         });
@@ -72,7 +66,7 @@ export class AnnotatedLabel {
     }
 
     private get isInline(): boolean {
-        return this.decision.form === 'inline';
+        return this.decision?.form === 'inline';
     }
 
     /** Applies an analysis with the current preferences; `null` removes annotations. */
@@ -86,13 +80,17 @@ export class AnnotatedLabel {
             this.applyWhenMapped(analysis, preferences);
             return;
         }
-        this.decision = this.measureFit(analysis, preferences);
-        if (this.decision.form === 'ruby' && this.decision.needsRoom)
-            this.addRoom();
-        if (this.decision.form === 'ruby')
-            this.createRuby(analysis, this.decision.scale);
-        else if (this.decision.form === 'inline')
+        this.decision = this.measureFit(preferences);
+        if (this.decision.form === 'inline') {
             this.setLabelText(analysis.display_inline);
+            return;
+        }
+        if (this.decision.needsRoom)
+            this.addRoom();
+        // Readings already in the text (from ja@furigana catalogs) move above the kanji.
+        if (analysis.plain_text !== this.originalText)
+            this.setLabelText(analysis.plain_text);
+        this.createRuby(analysis, this.decision.scale);
     }
 
     /** Moves ruby actors to follow the label (menus animate and re-layout). */
@@ -103,6 +101,8 @@ export class AnnotatedLabel {
             actor.visible = rect !== null;
             if (!rect)
                 continue;
+            // Follow the label's own fade (menus and the Overview animate opacity).
+            actor.opacity = this.label.get_paint_opacity();
             const [, , width, height] = actor.get_preferred_size();
             actor.set_position(Math.round(rect.x + (rect.width - width) / 2), Math.round(rect.y - height * (1 - RUBY_DROP)));
         }
@@ -114,7 +114,7 @@ export class AnnotatedLabel {
         const displayed = analysis ? positionAt(this.label, stageX, stageY) : null;
         if (!analysis || displayed === null)
             return null;
-        const position = this.isInline ? inlineToOriginalPositions(analysis.text, analysis.tokens)[displayed] : displayed;
+        const position = this.isInline ? inlineToOriginalPositions(analysis.plain_text, analysis.tokens)[displayed] : displayed;
         const token = position === undefined ? null : tokenAt(analysis.tokens, position);
         if (!token)
             return null;
@@ -138,8 +138,8 @@ export class AnnotatedLabel {
     }
 
     private labelHit(analysis: Analysis, token: Token): WordHit {
-        const whole: Token = {...token, surface: analysis.text, start: 0, end: codePointLength(analysis.text),
-            lemma: analysis.text, meaning: analysis.phrase ?? token.meaning};
+        const whole: Token = {...token, surface: analysis.plain_text, start: 0, end: codePointLength(analysis.plain_text),
+            lemma: analysis.plain_text, meaning: analysis.phrase ?? token.meaning};
         return {key: `${this.id}:label`, token: whole, phrase: null, rect: this.labelRect()};
     }
 
@@ -149,16 +149,14 @@ export class AnnotatedLabel {
         return {x, y, width, height};
     }
 
-    private measureFit(analysis: Analysis, preferences: FuriganaPreferences): FitDecision {
+    private measureFit(preferences: FuriganaPreferences): FitDecision {
         const probe = this.createRubyLabel('あ', 1);
         const [, rubyHeight] = probe.get_preferred_height(-1);
         probe.destroy();
         return decideFit({
             spaceAbove: spaceAbove(this.label),
-            extraRoom: this.layoutPolicy.canAddRoom && enclosingButton(this.label) ? ROOM_PX : 0,
+            extraRoom: canHostRoom(layoutHost(this.label)) ? ROOM_PX : 0,
             rubyHeight: rubyHeight * (1 - RUBY_DROP),
-            availableWidth: this.layoutPolicy.canGrowWidth ? Infinity : this.label.clutter_text.width,
-            inlineWidth: naturalTextWidth(this.label, analysis.display_inline),
             minScale: preferences.minScale,
             preferredForm: preferences.displayForm,
         });
@@ -181,9 +179,10 @@ export class AnnotatedLabel {
     }
 
     private setLabelText(text: string): void {
-        this.isApplyingInline = true;
+        this.isApplyingText = true;
         this.label.text = text;
-        this.isApplyingInline = false;
+        this.isApplyingText = false;
+        this.isTextReplaced = text !== this.originalText;
     }
 
     private removeRuby(): void {
@@ -193,8 +192,8 @@ export class AnnotatedLabel {
     }
 
     private addRoom(): void {
-        this.roomButton = enclosingButton(this.label);
-        this.roomButton?.add_style_class_name(ROOM_CLASS);
+        this.roomHost = layoutHost(this.label);
+        this.roomHost?.add_style_class_name(ROOM_CLASS);
     }
 
     private clear(): void {
@@ -202,10 +201,10 @@ export class AnnotatedLabel {
             this.label.disconnect(this.mappedSignal);
         this.mappedSignal = null;
         this.removeRuby();
-        this.roomButton?.remove_style_class_name(ROOM_CLASS);
-        this.roomButton = null;
-        if (this.isInline)
+        this.roomHost?.remove_style_class_name(ROOM_CLASS);
+        this.roomHost = null;
+        if (this.isTextReplaced)
             this.setLabelText(this.originalText);
-        this.decision = {form: 'none'};
+        this.decision = null;
     }
 }

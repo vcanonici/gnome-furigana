@@ -12,7 +12,8 @@ const GAP = 6;
 const FADE_MS = 120;
 
 export class TranslationTooltip {
-    private readonly box = new St.BoxLayout({vertical: true, style_class: 'furigana-tooltip', reactive: false,
+    // The `furigana-` name prefix keeps the Shell-wide annotator away from our own text.
+    private readonly box = new St.BoxLayout({name: 'furigana-tooltip', vertical: true, style_class: 'furigana-tooltip', reactive: false,
         visible: false, opacity: 0});
     private readonly heading = new St.Label({style_class: 'furigana-tooltip-heading'});
     private readonly senses = new St.Label({style_class: 'furigana-tooltip-senses'});

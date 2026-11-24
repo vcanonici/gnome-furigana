@@ -35,9 +35,12 @@ export interface Token {
     meaning: Meaning | null;
 }
 
-/** Result of `Analyze`. */
+/** Result of `Analyze`. Token offsets refer to `plain_text`. */
 export interface Analysis {
     text: string;
+    /** `text` without readings it already carried (`設定(せってい)` → `設定`). */
+    plain_text: string;
+    reading_hints_applied: number;
     tokens: Token[];
     phrase: Meaning | null;
     display_inline: string;
@@ -49,6 +52,7 @@ export function isAnalysis(value: unknown): value is Analysis {
         return false;
     const candidate = value as Partial<Analysis>;
     return typeof candidate.text === 'string' &&
+        typeof candidate.plain_text === 'string' &&
         typeof candidate.display_inline === 'string' &&
         Array.isArray(candidate.tokens) &&
         candidate.tokens.every(token => typeof token.start === 'number' && typeof token.end === 'number' &&
