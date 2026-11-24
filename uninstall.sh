@@ -14,6 +14,7 @@ readonly MANIFEST="$APP_DATA/install-manifest"
 readonly STATE_FILE="$APP_DATA/install-state"
 readonly BACKUP_DIR="$APP_DATA/backup"
 readonly RESTORE_LIST="$APP_DATA/restore-list"
+readonly SYSTEM_MANIFEST="$APP_DATA/system-manifest"
 OPT_YES=0
 
 log() { printf '\033[1;34m[furigana]\033[0m %s\n' "$*" >&2; }
@@ -53,14 +54,34 @@ remove_recorded_paths() {
     systemctl --user daemon-reload 2>/dev/null || true
 }
 
-# Puts back launchers the user had before install.sh overrode them.
+# Removes the root-owned files install.sh created (only these exact paths).
+remove_system_paths() {
+    local path
+    [[ -f "$SYSTEM_MANIFEST" ]] || return 0
+    log "removendo catálogos ja@furigana e o gancho do apt (pede a senha de sudo)"
+    while IFS= read -r path; do
+        case "$path" in
+            /usr/local/lib/gnome-furigana|/usr/share/locale-langpack/ja@furigana|/etc/apt/apt.conf.d/99gnome-furigana)
+                sudo rm -rf -- "$path" ;;
+            *) log "ignorado (caminho de sistema inesperado): $path" ;;
+        esac
+    done < "$SYSTEM_MANIFEST"
+}
+
+# Puts back files the user had before install.sh changed them (launchers, pam_environment).
 restore_backups() {
     local path
     [[ -f "$RESTORE_LIST" ]] || return 0
     while IFS= read -r path; do
-        [[ -f "$BACKUP_DIR/$(basename "$path")" ]] || continue
-        cp -p "$BACKUP_DIR/$(basename "$path")" "$path"
-        log "restaurado: $path"
+        local saved
+        saved="$BACKUP_DIR/$(basename "$path")"
+        if [[ -f "$saved" ]]; then
+            cp -p "$saved" "$path"
+            log "restaurado: $path"
+        elif [[ -f "$saved.absent" ]]; then
+            rm -f -- "$path"
+            log "removido (não existia antes): $path"
+        fi
     done < "$RESTORE_LIST"
 }
 
@@ -85,6 +106,7 @@ main() {
     restore_language
     remove_recorded_paths
     restore_backups
+    remove_system_paths
     rm -rf -- "$APP_DATA"
     log "gnome-furigana removido. Encerre a sessão para concluir."
 }
