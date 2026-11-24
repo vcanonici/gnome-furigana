@@ -11,8 +11,8 @@ publish = false
 [dependencies]
 clap = { version = "4.6.9", features = ["derive"] }
 flate2 = "1.1.11"
-# IPADIC embedded: correct readings for UI vocabulary with no runtime data files.
-lindera = { version = "7.0.0", default-features = false, features = ["embed-ipadic"] }
+# UniDic (NINJAL) embedded: best readings for UI text, no runtime data files; mapped lazily.
+lindera = { version = "7.0.0", default-features = false, features = ["embed-unidic"] }
 lru = "0.19.2"
 quick-xml = "0.42.0"
 rusqlite = { version = "0.43.0", features = ["bundled"] }
