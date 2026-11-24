@@ -37,9 +37,14 @@ export class HoverController {
             this.machine.reset();
     }
 
-    /** Pointer left the component, its menu closed or a label went away. */
+    /** Pointer left the component or a menu closed. */
     reset(): void {
         this.machine.reset();
+    }
+
+    /** A label went away: cancel only if the word under the pointer was in it. */
+    forgetLabel(labelId: number): void {
+        this.machine.resetIf(key => key.startsWith(`${labelId}:`));
     }
 
     destroy(): void {

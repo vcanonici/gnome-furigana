@@ -42,7 +42,10 @@ shell_eval() {
     python3 -c '
 import ast, sys
 flag, _, rest = sys.argv[1].strip()[1:-1].partition(", ")
-print(ast.literal_eval(rest) if flag == "true" else "null")' "$reply"
+payload = ast.literal_eval(rest) if rest else ""
+if flag != "true":
+    print(f"[acceptance] Eval error: {payload}", file=sys.stderr)
+print(payload if flag == "true" else "null")' "$reply"
 }
 
 json_field() {
@@ -133,6 +136,7 @@ run_scenarios() {
     sleep 0.3
     check "CA-H01 no tooltip before 2000 ms" "$(json_field "$(shell_eval 'furiganaProbe.state()')" tooltipVisible)" false
     sleep 0.8
+    log "hover internals: $(shell_eval "(() => { const s = Main.extensionManager.lookup('$UUID').stateObj.session; const [x, y] = global.get_pointer(); const hit = s.annotator.hitTest(x, y); return {pointer: [x, y], hit: hit ? hit.key : null, state: s.hover.machine.state.kind}; })()")"
     state="$(shell_eval 'furiganaProbe.state()')"
     check "CA-H02 tooltip after 2000 ms despite small move" "$(json_field "$state" tooltipVisible)" true
     log "tooltip: $(json_field "$state" tooltipText)"

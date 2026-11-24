@@ -7,7 +7,8 @@
     const {Clutter, St} = imports.gi;
     const seat = Clutter.get_default_backend().get_default_seat();
     const pointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
-    const KANJI = /[\u4e00-\u9fff]/u;
+    // Literal ranges: gdbus parses the Eval argument as GVariant text and eats backslashes.
+    const KANJI = /[一-鿿]/u;
 
     const quickSettingsMenu = () => Main.panel.statusArea.quickSettings.menu;
 
@@ -59,7 +60,7 @@
         const labels = descendants(Main.layoutManager.uiGroup, actor => actor instanceof St.Label && actor.mapped &&
             !isOwnActor(actor) && KANJI.test(actor.text) && actor.get_paint_opacity() > 0);
         return labels.filter(label => {
-            if (/\(\p{Script=Hiragana}+\)/u.test(label.text))
+            if (/[(][ぁ-ゟー]+[)]/u.test(label.text))
                 return false;
             const [x, y] = label.get_transformed_position();
             const [width] = label.get_transformed_size();

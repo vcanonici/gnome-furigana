@@ -62,6 +62,12 @@ export class HoverStateMachine<T> {
         this.state = {kind: 'idle'};
     }
 
+    /** Resets only when the current word's key matches (e.g. its label was destroyed). */
+    resetIf(isAffected: (key: string) => boolean): void {
+        if (this.state.kind !== 'idle' && isAffected(this.state.key))
+            this.reset();
+    }
+
     /** True while a tooltip is visible. */
     get isShowing(): boolean {
         return this.state.kind === 'showing';
