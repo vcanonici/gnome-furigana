@@ -120,9 +120,10 @@ install_apt_packages() {
     sudo apt-get install -y --no-install-recommends "${missing[@]}"
 }
 
+# The newest release, prereleases included (`releases/latest` ignores prereleases).
 latest_version() {
-    curl -fsSL "https://api.github.com/repos/$REPOSITORY/releases/latest" \
-        | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n1
+    curl -fsSL "https://api.github.com/repos/$REPOSITORY/releases?per_page=1" 2>/dev/null \
+        | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n1 || true
 }
 
 # Sets RELEASE_DIR to a directory laid out by packaging/stage-release.sh.
@@ -133,7 +134,7 @@ fetch_release() {
     fi
     local version="$OPT_VERSION" name url
     [[ "$version" != latest ]] || version="$(latest_version)"
-    [[ -n "$version" ]] || die "não foi possível descobrir a versão mais recente"
+    [[ -n "$version" ]] || die "não foi possível consultar os releases de $REPOSITORY (rede?); use --version X.Y.Z"
     name="gnome-furigana-${version}-x86_64"
     url="https://github.com/$REPOSITORY/releases/download/v$version/$name.tar.gz"
     log "baixando $name"
