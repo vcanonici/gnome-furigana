@@ -5,9 +5,10 @@ use std::sync::Arc;
 
 use lru::LruCache;
 
-use crate::alignment::{align, render_inline};
+use crate::alignment::{Segment, align};
 use crate::counters::apply_counter_readings;
 use crate::glossary::Glossary;
+use crate::inline_readings::{ReadingHint, render_segments, strip_inline_readings};
 use crate::kana::has_kanji;
 use crate::morphology::{Morpheme, MorphologicalAnalyzer, MorphologyError};
 use crate::protocol::{Analysis, Token};
@@ -70,20 +71,27 @@ impl Analyzer {
     }
 
     fn analyze_uncached(&self, text: &str) -> Result<Analysis, AnalysisError> {
-        if !has_kanji(text) {
+        let stripped = strip_inline_readings(text);
+        let plain = stripped.plain.as_str();
+        if !has_kanji(plain) {
             return Ok(Analysis {
                 text: text.to_owned(),
+                plain_text: plain.to_owned(),
+                reading_hints_applied: 0,
                 tokens: Vec::new(),
                 phrase: None,
-                display_inline: text.to_owned(),
+                display_inline: plain.to_owned(),
             });
         }
-        let words = merge_compounds(&apply_counter_readings(&self.morphology.analyze(text)?), &self.glossary);
-        let tokens: Vec<Token> = words.into_iter().map(|word| self.token(word)).collect();
+        let words = merge_compounds(&apply_counter_readings(&self.morphology.analyze(plain)?), &self.glossary);
+        let mut tokens: Vec<Token> = words.into_iter().map(|word| self.token(word)).collect();
+        let reading_hints_applied = tokens.iter_mut().map(|token| apply_reading_hints(token, &stripped.hints)).sum();
         Ok(Analysis {
             text: text.to_owned(),
-            phrase: self.glossary.lookup_curated(trim_ellipsis(text)),
-            display_inline: render_inline_text(text, &tokens),
+            plain_text: plain.to_owned(),
+            reading_hints_applied,
+            phrase: self.glossary.lookup_curated(trim_ellipsis(plain)),
+            display_inline: render_inline_text(plain, &tokens),
             tokens,
         })
     }
@@ -109,6 +117,32 @@ impl Analyzer {
     }
 }
 
+/// Replaces segment readings with readings the input already carried for exactly the
+/// same kanji run (they come from our own catalogs, i.e. the same aligner). Returns how
+/// many were applied.
+fn apply_reading_hints(token: &mut Token, hints: &[ReadingHint]) -> usize {
+    let mut applied = 0;
+    let mut start = token.start;
+    for segment in &mut token.segments {
+        let end = start + segment.text.chars().count();
+        if let Some(hint) = hints.iter().find(|hint| hint.start == start && hint.end == end) {
+            if segment.reading.is_some() {
+                segment.reading = Some(hint.reading.clone());
+                applied += 1;
+            }
+        }
+        start = end;
+    }
+    if applied > 0 {
+        token.reading = Some(token.segments.iter().map(segment_reading).collect());
+    }
+    applied
+}
+
+fn segment_reading(segment: &Segment) -> String {
+    segment.reading.clone().unwrap_or_else(|| crate::kana::to_hiragana(&segment.text))
+}
+
 /// Inline rendering of the whole text: words get `漢字(かんじ)`, everything between
 /// them (spaces, punctuation the analyzer skipped) is copied unchanged.
 fn render_inline_text(text: &str, tokens: &[Token]) -> String {
@@ -117,7 +151,7 @@ fn render_inline_text(text: &str, tokens: &[Token]) -> String {
     let mut cursor = 0;
     for token in tokens {
         rendered.extend(characters.get(cursor..token.start).unwrap_or_default());
-        rendered.push_str(&render_inline(&token.segments));
+        rendered.push_str(&render_segments(&token.segments));
         cursor = token.end;
     }
     rendered.extend(characters.get(cursor..).unwrap_or_default());
@@ -223,6 +257,20 @@ mod tests {
     fn inline_rendering_keeps_text_between_words() {
         let analysis = analyzer().analyze("11月24日 16:59").unwrap();
         assert_eq!(analysis.display_inline, "11月(じゅういちがつ)24日(にじゅうよっか) 16:59");
+    }
+
+    #[test]
+    fn already_annotated_text_is_not_annotated_twice() {
+        let analysis = analyzer().analyze("電源(でんげん)管理(かんり)").unwrap();
+        assert_eq!(analysis.plain_text, "電源管理");
+        assert_eq!(analysis.display_inline, "電源(でんげん)管理(かんり)");
+        assert_eq!(analysis.reading_hints_applied, 2);
+    }
+
+    #[test]
+    fn mnemonic_parentheses_survive() {
+        let analysis = analyzer().analyze("固定ワークスペース(_F)").unwrap();
+        assert_eq!(analysis.display_inline, "固定(こてい)ワークスペース(_F)");
     }
 
     #[test]
