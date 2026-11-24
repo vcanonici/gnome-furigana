@@ -16,7 +16,6 @@ set -euo pipefail
 readonly REPOSITORY="vcanonici/gnome-furigana"
 readonly UUID="furigana@vcanonici.github.io"
 readonly SCHEMA_FILE="org.gnome.shell.extensions.furigana.gschema.xml"
-readonly JMDICT_URL="https://www.edrdg.org/pub/Nihongo/JMdict_e.gz"
 readonly APT_PACKAGES=(language-pack-gnome-ja language-pack-ja fonts-noto-cjk gir1.2-adw-1)
 
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -54,7 +53,7 @@ Uso: install.sh [opções]
   --version X.Y.Z       versão do release a baixar (padrão: a mais recente)
   --source DIR          instalar de um diretório de release ou checkout local
   --language ja|keep    trocar a sessão para japonês ou manter (padrão: perguntar)
-  --no-jmdict           não baixar o dicionário JMdict (traduções só do glossário)
+  --no-jmdict           não instalar o dicionário JMdict (traduções só do glossário)
   --no-settings-panel   não instalar o painel Furigana nas Configurações
   --no-apt              não instalar pacotes apt
   --no-system           sem sudo: não gerar catálogos ja@furigana (apps GTK sem furigana)
@@ -193,16 +192,13 @@ install_service() {
     "$APP_DATA/bin/gnome-furigana" analyze 設定 > /dev/null || die "o serviço não executa neste sistema"
 }
 
+# The release ships the prebuilt index (vendored snapshot): no download at install time.
 install_dictionary() {
     ((OPT_JMDICT)) || { log "JMdict: ignorado (--no-jmdict)"; return; }
-    if [[ -f "$APP_DATA/jmdict.sqlite" ]]; then log "JMdict: já indexado"; return; fi
-    log "baixando JMdict (EDRDG, CC-BY-SA 4.0) e indexando"
-    if curl -fsSL -o "$WORK_DIR/JMdict_e.gz" "$JMDICT_URL" \
-        && "$APP_DATA/bin/gnome-furigana" build-jmdict "$WORK_DIR/JMdict_e.gz" > /dev/null; then
-        record "$APP_DATA/jmdict.sqlite"
-    else
-        warn "JMdict indisponível agora; traduções virão só do glossário (rode o instalador de novo depois)"
-    fi
+    log "JMdict (EDRDG, CC BY-SA 4.0) → $APP_DATA/jmdict.sqlite"
+    install -m 0644 "$RELEASE_DIR/data/jmdict.sqlite" "$APP_DATA/jmdict.sqlite"
+    install -m 0644 "$RELEASE_DIR/data/JMdict-LICENSE.md" "$APP_DATA/JMdict-LICENSE.md"
+    record "$APP_DATA/jmdict.sqlite" "$APP_DATA/JMdict-LICENSE.md"
 }
 
 install_schema() {
@@ -236,6 +232,14 @@ enable_extension() {
             enabled="${enabled%]}, '$UUID']"
         fi
         gsettings set org.gnome.shell enabled-extensions "$enabled"
+    fi
+    # `disabled-extensions` wins over `enabled-extensions` in GNOME 46: a user who once
+    # turned the extension off would otherwise stay without it after reinstalling.
+    local disabled
+    disabled="$(gsettings get org.gnome.shell disabled-extensions)"
+    if [[ "$disabled" == *"'$UUID'"* ]]; then
+        disabled="$(printf '%s' "$disabled" | sed -e "s/, '$UUID'//; s/'$UUID', //; s/'$UUID'//")"
+        gsettings set org.gnome.shell disabled-extensions "$disabled"
     fi
     gsettings set org.gnome.shell disable-user-extensions false
 }
