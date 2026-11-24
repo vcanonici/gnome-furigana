@@ -4,6 +4,8 @@
 
 mod alignment;
 mod analysis;
+mod catalog;
+mod content_digest;
 mod counters;
 mod dbus_interface;
 mod event_log;
@@ -50,6 +52,27 @@ enum Command {
         #[arg(long)]
         reading: Option<String>,
     },
+    /// Gera os catálogos gettext anotados `ja@furigana` (furigana inline nos apps GTK).
+    ///
+    /// Só regera domínios cuja fonte mudou. Saída JSON com o relatório. Exit 1 se algum
+    /// catálogo falhar. Normalmente roda como root pelo gancho do apt.
+    BuildCatalogs {
+        /// Diretório de catálogos japoneses de origem (repetível; o primeiro tem prioridade).
+        #[arg(long = "source")]
+        sources: Vec<PathBuf>,
+        /// Diretório `LC_MESSAGES` de saída.
+        #[arg(long, default_value = catalog::catalog_build::DEFAULT_OUTPUT)]
+        output: PathBuf,
+        /// Domínios a ignorar, separados por vírgula (padrão: gnome-shell,mutter).
+        #[arg(long, value_delimiter = ',')]
+        exclude: Option<Vec<String>>,
+        /// Mostrar o que seria feito sem gravar nada.
+        #[arg(long)]
+        dry_run: bool,
+        /// Não imprimir o relatório.
+        #[arg(long)]
+        quiet: bool,
+    },
     /// Indexa o `JMdict_e(.gz)` da EDRDG em `~/.local/share/gnome-furigana/jmdict.sqlite`.
     BuildJmdict {
         /// Caminho do `JMdict_e` ou `JMdict_e.gz`.
@@ -77,6 +100,9 @@ fn run(command: Command) -> Result<(), String> {
         }
         Command::Analyze { text } => print_json(&*load_analyzer()?.analyze(&text).map_err(|error| error.to_string())?),
         Command::Lookup { term, reading } => print_json(&load_analyzer()?.glossary().lookup(&term, reading.as_deref())),
+        Command::BuildCatalogs { sources, output, exclude, dry_run, quiet } => {
+            build_catalogs(sources, output, exclude, dry_run, quiet)
+        }
         Command::BuildJmdict { source } => {
             let target_dir = xdg_paths::data_dir();
             std::fs::create_dir_all(&target_dir)
@@ -86,6 +112,34 @@ fn run(command: Command) -> Result<(), String> {
             print_json(&serde_json::json!({ "rows": rows }))
         }
     }
+}
+
+fn build_catalogs(
+    sources: Vec<PathBuf>,
+    output: PathBuf,
+    exclude: Option<Vec<String>>,
+    dry_run: bool,
+    quiet: bool,
+) -> Result<(), String> {
+    use catalog::catalog_build::{BuildOptions, DEFAULT_EXCLUDED, DEFAULT_SOURCES};
+    let options = BuildOptions {
+        sources: if sources.is_empty() { DEFAULT_SOURCES.iter().map(PathBuf::from).collect() } else { sources },
+        output,
+        excluded: exclude.unwrap_or_else(|| DEFAULT_EXCLUDED.map(str::to_owned).to_vec()).into_iter().collect(),
+        dry_run,
+    };
+    let mut analyzer = load_analyzer()?;
+    let report = catalog::catalog_build::build_catalogs(&mut analyzer, &options).map_err(|error| error.to_string())?;
+    event_log::log_event(
+        "catalog",
+        "build",
+        if report.failed.is_empty() { event_log::Status::Ok } else { event_log::Status::Error },
+        &[("built", &report.built.to_string()), ("unchanged", &report.unchanged.to_string())],
+    );
+    if !quiet {
+        print_json(&report)?;
+    }
+    if report.failed.is_empty() { Ok(()) } else { Err(format!("{} catalogs failed", report.failed.len())) }
 }
 
 fn main() -> ExitCode {

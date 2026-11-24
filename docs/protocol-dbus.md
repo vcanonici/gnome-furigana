@@ -14,6 +14,17 @@ Todos os métodos devolvem **uma string JSON**; os tipos estão em `service/src/
 Erros: `org.freedesktop.DBus.Error.InvalidArgs` para texto longo demais;
 `org.freedesktop.DBus.Error.Failed` para falhas internas.
 
+## Texto já anotado
+
+Se o texto chega com leituras inline (por exemplo, um nome vindo de um catálogo
+`ja@furigana`: `設定(せってい)`), `Analyze` remove os grupos `(ひらがな)` que seguem uma
+sequência de kanji e devolve:
+
+- `plain_text`: o texto sem as leituras. **Os offsets dos tokens referem-se a ele.**
+- `reading_hints_applied`: quantas leituras presentes foram reaproveitadas.
+
+Assim nada é anotado duas vezes.
+
 ## Convenção de offsets
 
 `start`/`end` são **pontos de código Unicode**, fim exclusivo — a mesma unidade das posições de
