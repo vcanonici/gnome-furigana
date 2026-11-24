@@ -37,6 +37,8 @@ export class ShellLabelAnnotator {
     private readonly labels = new Map<St.Label, AnnotatedLabel>();
     private readonly destroySignals = new Map<St.Label, number>();
     private readonly eventSignal: number;
+    private readonly cursorTracker = Meta.CursorTracker.get_for_display(global.display);
+    private readonly cursorSignal: number;
     private readonly overviewSignal: number;
     private readonly rescanSource: number;
     private readonly laterId: number;
@@ -44,12 +46,16 @@ export class ShellLabelAnnotator {
     constructor(private readonly client: LinguisticClient, private readonly hover: HoverController,
         private preferences: FuriganaPreferences) {
         Main.layoutManager.uiGroup.add_child(this.overlay);
+        // Pointer motion comes from the cursor tracker: an open menu grabs input, and
+        // during a grab the stage receives no events, so stage signals would miss hovers.
+        this.cursorSignal = this.cursorTracker.connect('position-invalidated', () => { this.handlePointerMoved(); });
         this.eventSignal = global.stage.connect('captured-event', (_actor, event: Clutter.Event) => {
             this.handleEvent(event);
             return Clutter.EVENT_PROPAGATE;
         });
         this.overviewSignal = overview().connect('showing', () => { this.scan(); });
-        this.rescanSource = GLib.timeout_add(GLib.PRIORITY_LOW, RESCAN_INTERVAL_MS, () => {
+        // Default priority: a low-priority source can starve while the Shell keeps redrawing.
+        this.rescanSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, RESCAN_INTERVAL_MS, () => {
             this.scan();
             return GLib.SOURCE_CONTINUE;
         });
@@ -72,6 +78,7 @@ export class ShellLabelAnnotator {
         GLib.source_remove(this.rescanSource);
         global.compositor.get_laters().remove(this.laterId);
         global.stage.disconnect(this.eventSignal);
+        this.cursorTracker.disconnect(this.cursorSignal);
         overview().disconnect(this.overviewSignal);
         for (const [label, annotated] of this.labels) {
             annotated.destroy();
@@ -94,10 +101,14 @@ export class ShellLabelAnnotator {
     }
 
     private forget(label: St.Label): void {
-        this.labels.get(label)?.destroy();
+        const annotated = this.labels.get(label);
+        if (annotated) {
+            // Other labels disappear all the time (notifications expire): keep their hover.
+            this.hover.forgetLabel(annotated.id);
+            annotated.destroy();
+        }
         this.labels.delete(label);
         this.destroySignals.delete(label);
-        this.hover.reset();
     }
 
     private async annotate(annotated: AnnotatedLabel): Promise<void> {
@@ -117,19 +128,16 @@ export class ShellLabelAnnotator {
             annotated.syncPosition();
     }
 
+    private handlePointerMoved(): void {
+        const [x, y] = global.get_pointer();
+        this.hover.point(this.hitTest(x, y));
+    }
+
+    /** Clicks and key presses dismiss the card (when no grab hides them from the stage). */
     private handleEvent(event: Clutter.Event): void {
         const type = event.type();
-        if (type === Clutter.EventType.MOTION) {
-            const [x, y] = event.get_coords();
-            this.hover.point(this.hitTest(x, y));
-        } else if (type === Clutter.EventType.LEAVE) {
-            // Typed non-null upstream, but null when the pointer leaves the stage.
-            const related = event.get_related() as Clutter.Actor | null;
-            if (related === null)
-                this.hover.reset();
-        } else if (type === Clutter.EventType.BUTTON_PRESS || type === Clutter.EventType.KEY_PRESS) {
+        if (type === Clutter.EventType.BUTTON_PRESS || type === Clutter.EventType.KEY_PRESS)
             this.hover.reset();
-        }
     }
 
     private hitTest(stageX: number, stageY: number): WordHit | null {
@@ -142,9 +150,15 @@ export class ShellLabelAnnotator {
     }
 }
 
+/** The placeholder label of an entry (e.g. 検索ワードを入力); its typed text is never touched. */
+function entryHint(entry: St.Entry): St.Label | null {
+    const hint = entry.get_hint_actor();
+    return hint instanceof St.Label && hint.mapped ? hint : null;
+}
+
 /**
- * Depth-first list of mapped `St.Label`s. Skips unmapped subtrees (hidden UI), editable
- * text and our own actors.
+ * Depth-first list of mapped `St.Label`s. Skips unmapped subtrees (hidden UI), our own
+ * actors and editable text; of an entry only its placeholder is annotated.
  */
 function findMappedLabels(root: Clutter.Actor): St.Label[] {
     const found: St.Label[] = [];
@@ -152,8 +166,14 @@ function findMappedLabels(root: Clutter.Actor): St.Label[] {
     for (let actor = pending.pop(); actor; actor = pending.pop()) {
         // Typed as string upstream, but null for actors that were never named.
         const name = actor.name as string | null;
-        if (!actor.mapped || actor instanceof St.Entry || name?.startsWith(OWN_ACTOR_PREFIX))
+        if (!actor.mapped || name?.startsWith(OWN_ACTOR_PREFIX))
             continue;
+        if (actor instanceof St.Entry) {
+            const hint = entryHint(actor);
+            if (hint)
+                found.push(hint);
+            continue;
+        }
         if (actor instanceof St.Label)
             found.push(actor);
         pending.push(...actor.get_children());

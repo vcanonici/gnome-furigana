@@ -2,9 +2,10 @@
 
 Transforma a interface japonesa do GNOME num ambiente de estudo:
 
-- **furigana acima do kanji** nos rótulos do GNOME Shell (configurações rápidas e barra superior);
-- **tradução pt-BR de uma palavra** ao deixar o mouse parado sobre ela por 2 segundos;
-- **layout que não quebra**: o furigana encolhe até 80 % e, se não couber, vira `漢字(かんじ)`; se nem isso couber, a anotação é omitida;
+- **furigana em todo o GNOME Shell** (barra, menus, Overview, notificações…): acima do kanji quando
+  há espaço, senão `漢字(かんじ)` — **nunca omitido**;
+- **furigana nos apps GTK** (Configurações, Arquivos…), inline, por catálogos de tradução anotados;
+- **tradução pt-BR de uma palavra** ao deixar o mouse parado sobre ela por 2 segundos (Shell);
 - **painel "Furigana" dentro das Configurações** do GNOME.
 
 Alvo: **Ubuntu 24.04 · GNOME Shell 46 · Wayland · x86_64**. Estado: **experimental (0.1.0)**.
@@ -22,10 +23,11 @@ git clone https://github.com/vcanonici/gnome-furigana && cd gnome-furigana
 ./install.sh --source .
 ```
 
-O instalador roda **como usuário** e só usa `sudo` para pacotes apt ausentes
-(`language-pack-gnome-ja`, `fonts-noto-cjk`…). Ele pergunta se deve mudar o idioma da sessão para
-japonês. Tudo passa a funcionar **no próximo login** (no Wayland o Shell não recarrega extensões).
-Nenhum arquivo em `/usr/share/locale` é alterado.
+O instalador roda como usuário e pede `sudo` uma vez para gerar os catálogos `ja@furigana`
+(em `/usr/share/locale-langpack/ja@furigana`, regenerados automaticamente após cada `apt`) e para
+pacotes apt ausentes. Os catálogos originais **nunca** são alterados. Ele pergunta se deve mudar o
+idioma da sessão para japonês. Tudo passa a funcionar **no próximo login**. A instalação é
+autocontida: nada é baixado além do próprio release (nada com `--source`).
 
 | Opção | Efeito |
 |---|---|
@@ -33,7 +35,9 @@ Nenhum arquivo em `/usr/share/locale` é alterado.
 | `--language ja\|keep` | troca a sessão para japonês ou mantém |
 | `--no-jmdict` | não baixa o JMdict (traduções só do glossário curado) |
 | `--no-settings-panel` | não instala o painel nas Configurações |
-| `--no-apt` | nunca usa sudo |
+| `--no-apt` | não instala pacotes apt |
+| `--no-system` | sem sudo: só o Shell (apps GTK ficam sem furigana) |
+| `--settings-follow-session` | remove de um atalho seu das Configurações o forçar de idioma |
 | `--version X.Y.Z` / `--source DIR` | versão do release / diretório local |
 
 Desinstalar: `~/.local/share/gnome-furigana/…` é removido por `./uninstall.sh` (lê o manifesto do
@@ -42,11 +46,12 @@ instalador, desativa a extensão e oferece restaurar o idioma anterior).
 ## Como funciona
 
 ```text
-GNOME Shell (extensão TypeScript → GJS)           Serviço linguístico (Rust, ~7 MB RSS)
-  descobre St.Label → hit test por palavra   D-Bus   Lindera + IPADIC embutido (leituras)
+GNOME Shell (extensão TypeScript → GJS)           Serviço linguístico (Rust, ~17 MB RSS)
+  descobre St.Label → hit test por palavra   D-Bus   Lindera + UniDic embutido (leituras)
   furigana em atores sobrepostos, não-reativos ◄──►  alinhamento kanji/okurigana
   hover 2000 ms → cartão pt-BR                       glossário pt-BR curado → JMdict (en)
 Configurações (fork do g-c-c 46.7) ── GSettings org.gnome.shell.extensions.furigana ──┘
+Apps GTK ── LANGUAGE=ja@furigana:ja ── catálogos gerados pelo mesmo serviço (build-catalogs)
 ```
 
 - O rótulo original **nunca é substituído**: o furigana é desenhado em atores separados que não
@@ -69,13 +74,12 @@ atualizar o `gnome-control-center`, rode o instalador de novo para obter um buil
 
 | Componente | Estado |
 |---|---|
-| Configurações rápidas (GNOME Shell) | furigana + hover por palavra |
-| Barra superior (relógio, indicadores) | furigana (fallback inline quando falta espaço) + hover |
-| Overview, notificações | ainda não |
-| Aplicativos GTK (inclusive Configurações) | ainda não — planejado via AT-SPI |
+| GNOME Shell inteiro | ruby ou inline (nunca omitido) + hover por palavra |
+| Apps GTK/gettext (Configurações, Arquivos…) | inline `漢字(かんじ)`; hover ainda não |
+| Snap/Flatpak, texto fora do gettext | ainda não |
 
-Leituras usam análise morfológica com contexto (IPADIC); nomes próprios e palavras ambíguas podem
-sair sem leitura em vez de errados. Veja [docs/compatibility-matrix.md](docs/compatibility-matrix.md).
+Leituras usam análise morfológica com contexto (UniDic, NINJAL) e um glossário revisado que tem
+prioridade; nomes próprios e palavras ambíguas podem sair sem leitura em vez de errados. Veja [docs/compatibility-matrix.md](docs/compatibility-matrix.md).
 
 ## Desenvolvimento
 
@@ -94,5 +98,6 @@ contrato D-Bus em [docs/protocol-dbus.md](docs/protocol-dbus.md).
 
 ## Licenças
 
-Código: GPL-2.0-or-later. Dicionário morfológico IPADIC embutido via Lindera (licença IPADIC).
-JMdict © EDRDG, CC-BY-SA 4.0, baixado na instalação. Glossário pt-BR: parte deste projeto.
+Código: GPL-2.0-or-later. Dicionário morfológico UniDic (NINJAL) embutido via Lindera.
+JMdict © EDRDG, CC BY-SA 4.0, versionado em `data/jmdict/` (ver o README de lá). Glossário pt-BR:
+parte deste projeto.

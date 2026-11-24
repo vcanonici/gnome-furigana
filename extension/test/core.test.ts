@@ -85,6 +85,17 @@ test('CA-H04: leaving cancels the timer and hides a visible tooltip', () => {
     assert.equal(machine.isShowing, false);
 });
 
+test('a destroyed label cancels the hover only if the word was in it', () => {
+    const {clock, events, machine} = hoverHarness();
+    machine.enter('5:0', '電源');
+    clock.advance(1000);
+    machine.resetIf(key => key.startsWith('9:'));
+    clock.advance(1000);
+    assert.deepEqual(events, ['show:電源']);
+    machine.resetIf(key => key.startsWith('5:'));
+    assert.deepEqual(events, ['show:電源', 'hide']);
+});
+
 test('offsets are code points: 𠮷 counts as one position', () => {
     assert.equal(codePointLength('𠮷野家'), 3);
     const token: Token = {...settingsToken, surface: '行く', start: 4, end: 6,
