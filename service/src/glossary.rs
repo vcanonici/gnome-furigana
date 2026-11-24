@@ -39,6 +39,13 @@ pub struct Entry {
     pub language: &'static str,
 }
 
+/// Short stable fingerprint of the curated glossary; generated catalogs are rebuilt
+/// when it changes (compound merges depend on it).
+#[must_use]
+pub fn curated_fingerprint() -> String {
+    crate::content_digest::sha256_hex(CURATED_GLOSSARY.as_bytes(), 6)
+}
+
 /// A malformed glossary line.
 #[derive(Debug, thiserror::Error)]
 #[error("{origin}:{line}: expected `term<TAB>reading<TAB>gloss;…[<TAB>pos]`")]
