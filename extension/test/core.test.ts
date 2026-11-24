@@ -95,15 +95,15 @@ test('offsets are code points: 𠮷 counts as one position', () => {
     assert.equal(renderInline(token.segments), '行(い)く');
 });
 
-const fit: FitInput = {spaceAbove: 12, extraRoom: 0, rubyHeight: 12, availableWidth: 100, inlineWidth: 80,
-    minScale: 0.8, preferredForm: 'ruby'};
+const fit: FitInput = {spaceAbove: 12, extraRoom: 0, rubyHeight: 12, minScale: 0.8, preferredForm: 'ruby'};
 
-test('fit policy: ruby, shrunk ruby, inline, then omission', () => {
+test('fit policy: ruby, shrunk ruby, ruby with room, otherwise always inline (never omitted)', () => {
     assert.deepEqual(decideFit(fit), {form: 'ruby', scale: 1, needsRoom: false});
     assert.deepEqual(decideFit({...fit, spaceAbove: 9}), {form: 'ruby', scale: 0.9, needsRoom: false});
     assert.deepEqual(decideFit({...fit, spaceAbove: 4, extraRoom: 8}), {form: 'ruby', scale: 1, needsRoom: true});
     assert.deepEqual(decideFit({...fit, spaceAbove: 4}), {form: 'inline'});
-    assert.deepEqual(decideFit({...fit, spaceAbove: 4, inlineWidth: 140}), {form: 'none'});
+    // No room at all, not even for inline width: the reading is still shown inline.
+    assert.deepEqual(decideFit({...fit, spaceAbove: 0}), {form: 'inline'});
     assert.deepEqual(decideFit({...fit, preferredForm: 'inline'}), {form: 'inline'});
 });
 
@@ -115,7 +115,8 @@ test('CA-H05: tooltip for 設定 shows reading and Configurações; unknown word
 });
 
 test('protocol guard rejects malformed replies', () => {
-    assert.equal(isAnalysis({text: 'x', display_inline: 'x', tokens: []}), true);
+    assert.equal(isAnalysis({text: 'x', plain_text: 'x', reading_hints_applied: 0, display_inline: 'x', tokens: []}), true);
+    assert.equal(isAnalysis({text: 'x', display_inline: 'x', tokens: []}), false);
     assert.equal(isAnalysis({text: 'x', tokens: 'nope'}), false);
     assert.equal(isAnalysis(null), false);
 });

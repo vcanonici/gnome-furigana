@@ -46,7 +46,31 @@
         return {label: label.text, x: stageX + (x1 + x2) / 2, y: stageY + y1 + lineHeight / 2};
     }
 
+    const isOwnActor = actor => (actor.name ?? '').startsWith('furigana-') ||
+        (actor.get_parent() && (actor.get_parent().name ?? '').startsWith('furigana-'));
+
+    /** Visible labels with kanji that show no reading: neither inline `(かな)` nor ruby above. */
+    function labelsWithoutReading() {
+        const rubies = rubyActors().filter(actor => actor.mapped).map(actor => {
+            const [x, y] = actor.get_transformed_position();
+            const [width, height] = actor.get_transformed_size();
+            return {cx: x + width / 2, bottom: y + height};
+        });
+        const labels = descendants(Main.layoutManager.uiGroup, actor => actor instanceof St.Label && actor.mapped &&
+            !isOwnActor(actor) && KANJI.test(actor.text) && actor.get_paint_opacity() > 0);
+        return labels.filter(label => {
+            if (/\(\p{Script=Hiragana}+\)/u.test(label.text))
+                return false;
+            const [x, y] = label.get_transformed_position();
+            const [width] = label.get_transformed_size();
+            return !rubies.some(r => r.cx >= x && r.cx <= x + width && r.bottom >= y - 4 && r.bottom <= y + 12);
+        }).map(label => label.text);
+    }
+
     globalThis.furiganaProbe = {
+        withoutReading: () => labelsWithoutReading(),
+        showOverview: () => { Main.overview.show(); return 'overview'; },
+        hideOverview: () => { Main.overview.hide(); return 'hidden'; },
         openQuickSettings: () => { quickSettingsMenu().open(false); return 'opened'; },
         closeQuickSettings: () => { quickSettingsMenu().close(false); return 'closed'; },
         state: () => ({

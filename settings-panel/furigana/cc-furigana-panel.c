@@ -20,6 +20,8 @@
 #define SERVICE_PATH "/io/github/vcanonici/Furigana"
 #define SERVICE_INTERFACE "io.github.vcanonici.Furigana1"
 #define SERVICE_TIMEOUT_MS 2000
+#define CATALOG_DIR "/usr/share/locale-langpack/ja@furigana"
+#define CATALOG_LANGUAGE "ja@furigana"
 #define OVERRIDES_HEADER \
   "# Meu vocabulário gnome-furigana: termo<TAB>leitura<TAB>significado;outro sentido<TAB>classe\n" \
   "# Exemplo:\n# 設定\tせってい\tajustes\tsubstantivo\n"
@@ -35,9 +37,8 @@ struct _CcFuriganaPanel
   AdwSwitchRow *hover_row;
   AdwSpinRow   *delay_row;
   AdwComboRow  *scope_row;
-  AdwSwitchRow *quick_settings_row;
-  AdwSwitchRow *panel_row;
   AdwActionRow *service_row;
+  AdwActionRow *apps_row;
 
   GSettings    *settings;
   GCancellable *cancellable;
@@ -123,9 +124,6 @@ bind_settings (CcFuriganaPanel *self)
   g_settings_bind_with_mapping (self->settings, "hover-delay-ms", self->delay_row, "value",
                                 G_SETTINGS_BIND_DEFAULT, milliseconds_to_seconds, seconds_to_milliseconds,
                                 NULL, NULL);
-  g_settings_bind (self->settings, "component-quick-settings", self->quick_settings_row, "active",
-                   G_SETTINGS_BIND_DEFAULT);
-  g_settings_bind (self->settings, "component-panel", self->panel_row, "active", G_SETTINGS_BIND_DEFAULT);
   g_settings_bind (self->settings, "hover-enabled", self->delay_row, "sensitive", G_SETTINGS_BIND_GET);
   g_settings_bind (self->settings, "hover-enabled", self->scope_row, "sensitive", G_SETTINGS_BIND_GET);
 }
@@ -187,6 +185,27 @@ call_service (CcFuriganaPanel *self, const gchar *method)
                           G_VARIANT_TYPE ("(s)"), G_DBUS_CALL_FLAGS_NONE, SERVICE_TIMEOUT_MS,
                           self->cancellable, on_service_reply, self);
   g_object_unref (bus);
+}
+
+/* --- GTK applications (ja@furigana gettext catalogs) ------------------------------- */
+
+/* Catalogs are installed system-wide by install.sh; the session uses them when
+ * LANGUAGE (from ~/.pam_environment at login) lists ja@furigana first. */
+static void
+describe_apps_status (CcFuriganaPanel *self)
+{
+  const gchar *language = g_getenv ("LANGUAGE");
+  gboolean has_catalogs = g_file_test (CATALOG_DIR, G_FILE_TEST_IS_DIR);
+  gboolean is_active = language != NULL && g_str_has_prefix (language, CATALOG_LANGUAGE);
+  const gchar *subtitle;
+
+  if (has_catalogs && is_active)
+    subtitle = "Ativo: leituras 漢字(かんじ) nos apps GTK (Configurações, Arquivos…)";
+  else if (has_catalogs)
+    subtitle = "Catálogos instalados; ativam no próximo login";
+  else
+    subtitle = "Não instalado (reinstale sem --no-system)";
+  adw_action_row_set_subtitle (self->apps_row, subtitle);
 }
 
 /* --- Actions ----------------------------------------------------------------------- */
@@ -289,9 +308,8 @@ cc_furigana_panel_class_init (CcFuriganaPanelClass *klass)
   gtk_widget_class_bind_template_child (widget_class, CcFuriganaPanel, hover_row);
   gtk_widget_class_bind_template_child (widget_class, CcFuriganaPanel, delay_row);
   gtk_widget_class_bind_template_child (widget_class, CcFuriganaPanel, scope_row);
-  gtk_widget_class_bind_template_child (widget_class, CcFuriganaPanel, quick_settings_row);
-  gtk_widget_class_bind_template_child (widget_class, CcFuriganaPanel, panel_row);
   gtk_widget_class_bind_template_child (widget_class, CcFuriganaPanel, service_row);
+  gtk_widget_class_bind_template_child (widget_class, CcFuriganaPanel, apps_row);
   gtk_widget_class_bind_template_callback (widget_class, on_reload_clicked);
   gtk_widget_class_bind_template_callback (widget_class, on_edit_vocabulary_activated);
   gtk_widget_class_bind_template_callback (widget_class, on_reset_activated);
@@ -312,5 +330,6 @@ cc_furigana_panel_init (CcFuriganaPanel *self)
     }
   gtk_stack_set_visible_child_name (self->stack, "settings");
   bind_settings (self);
+  describe_apps_status (self);
   call_service (self, "Health");
 }

@@ -119,6 +119,8 @@ run_scenarios() {
     printf '%s\n' "$state" > "$OUT/state-open.json"
     check "CA-F01 ruby visible over Quick Settings" "$(json_field "$state" ruby | python3 -c 'import json,sys; print(len(json.load(sys.stdin)) > 0)')" True
     screenshot quick-settings-ruby
+    check "never omitted: every visible kanji label in Quick Settings has a reading" \
+        "$(shell_eval 'furiganaProbe.withoutReading()')" '[]'
     log "top bar: $(json_field "$state" panelLabels)"
     check "top bar clock annotated (inline, panel has no room above)" \
         "$(json_field "$state" panelLabels | python3 -c 'import json,sys; print(any("(" in t for t in json.load(sys.stdin)))')" True
@@ -143,6 +145,15 @@ run_scenarios() {
     shell_eval 'furiganaProbe.closeQuickSettings()' > /dev/null
     sleep 0.5
     check "menu closed hides ruby" "$(json_field "$(shell_eval 'furiganaProbe.state()')" ruby)" '[]'
+
+    shell_eval 'furiganaProbe.showOverview()' > /dev/null
+    sleep 3
+    log "overview without reading: $(shell_eval 'furiganaProbe.withoutReading()')"
+    check "never omitted: every visible kanji label in the Overview has a reading" \
+        "$(shell_eval 'furiganaProbe.withoutReading()')" '[]'
+    screenshot overview
+    shell_eval 'furiganaProbe.hideOverview()' > /dev/null
+    sleep 1
 
     shell_eval "Main.extensionManager.disableExtension('$UUID')" > /dev/null
     sleep 1

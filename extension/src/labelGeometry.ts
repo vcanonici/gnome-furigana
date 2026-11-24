@@ -33,14 +33,6 @@ export function positionAt(label: St.Label, stageX: number, stageY: number): num
     return position >= 0 ? position : null;
 }
 
-/** Natural width of `content` in the label's font, ignoring ellipsization. */
-export function naturalTextWidth(label: St.Label, content: string): number {
-    const layout = label.clutter_text.get_layout().copy();
-    layout.set_width(-1);
-    layout.set_text(content, -1);
-    return layout.get_pixel_size()[0];
-}
-
 /** CSS font size of the label, e.g. `11pt` or `14px`, scaled by `factor`. */
 export function scaledFontSize(label: St.Label, factor: number): string {
     const font: Pango.FontDescription = label.get_theme_node().get_font();
@@ -54,13 +46,26 @@ export function foregroundCss(label: St.Label): string {
     return `rgba(${color.red},${color.green},${color.blue},${(color.alpha / 255).toFixed(3)})`;
 }
 
-/** The button that contains the label (a Quick Settings toggle, a panel button), if any. */
-export function enclosingButton(label: St.Label): St.Button | null {
+// Style classes of the Shell 46 widgets that may grow to make room for furigana.
+const ROOM_HOST_CLASSES = ['quick-toggle', 'popup-menu-item'];
+
+function isLayoutHost(actor: Clutter.Actor): actor is St.Widget {
+    return actor instanceof St.Button ||
+        (actor instanceof St.Widget && actor.has_style_class_name('popup-menu-item'));
+}
+
+/** The widget that frames the label: a button (toggle, panel button) or a menu item. */
+export function layoutHost(label: St.Label): St.Widget | null {
     for (let actor = label.get_parent(); actor; actor = actor.get_parent()) {
-        if (actor instanceof St.Button)
+        if (isLayoutHost(actor))
             return actor;
     }
     return null;
+}
+
+/** True when the host may gain top padding (menus grow; the top bar and app grid do not). */
+export function canHostRoom(host: St.Widget | null): boolean {
+    return host !== null && ROOM_HOST_CLASSES.some(name => host.has_style_class_name(name));
 }
 
 function stageBottom(actor: Clutter.Actor): number {
@@ -70,7 +75,7 @@ function stageBottom(actor: Clutter.Actor): number {
 
 /**
  * Free space above the label: up to the bottom of the previous visible sibling (e.g. a
- * toggle title above its subtitle), else up to the top of the enclosing button.
+ * toggle title above its subtitle), else up to the top of its layout host.
  */
 export function spaceAbove(label: St.Label): number {
     const [, labelTop] = label.clutter_text.get_transformed_position();
@@ -78,8 +83,8 @@ export function spaceAbove(label: St.Label): number {
     const previous = label.get_previous_sibling();
     if (previous?.visible && previous.mapped)
         limit = Math.max(limit, stageBottom(previous));
-    const button = enclosingButton(label);
-    if (button)
-        limit = Math.max(limit, button.get_transformed_position()[1]);
+    const host = layoutHost(label);
+    if (host)
+        limit = Math.max(limit, host.get_transformed_position()[1]);
     return Number.isFinite(limit) ? Math.max(0, labelTop - limit) : 0;
 }

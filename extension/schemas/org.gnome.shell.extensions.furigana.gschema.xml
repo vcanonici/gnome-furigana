@@ -45,13 +45,5 @@
       <default>0.8</default>
       <summary>Escala mínima do furigana antes do fallback inline</summary>
     </key>
-    <key name="component-quick-settings" type="b">
-      <default>true</default>
-      <summary>Anotar o menu de configurações rápidas</summary>
-    </key>
-    <key name="component-panel" type="b">
-      <default>true</default>
-      <summary>Anotar a barra superior</summary>
-    </key>
   </schema>
 </schemalist>
