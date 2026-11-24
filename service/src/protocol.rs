@@ -34,6 +34,11 @@ pub struct Token {
 pub struct Analysis {
     /// The input text, unchanged.
     pub text: String,
+    /// The input without readings it already carried (`設定(せってい)` → `設定`).
+    /// Token offsets refer to this text; equal to `text` when nothing was stripped.
+    pub plain_text: String,
+    /// How many readings already present in the input were reused.
+    pub reading_hints_applied: usize,
     /// Words in order; empty when the text has no kanji.
     pub tokens: Vec<Token>,
     /// Curated meaning of the whole string when it is a known UI expression.

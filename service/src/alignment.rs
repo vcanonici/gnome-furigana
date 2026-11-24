@@ -102,21 +102,10 @@ pub fn align(surface: &str, reading: &str) -> Vec<Segment> {
     }
 }
 
-/// Renders segments in the parenthesised fallback form 食(た)べる.
-#[must_use]
-pub fn render_inline(segments: &[Segment]) -> String {
-    segments
-        .iter()
-        .map(|segment| match &segment.reading {
-            Some(reading) => format!("{}({reading})", segment.text),
-            None => segment.text.clone(),
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::inline_readings::render_segments as render_inline;
 
     fn inline(surface: &str, reading: &str) -> String {
         render_inline(&align(surface, reading))

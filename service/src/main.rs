@@ -8,6 +8,7 @@ mod counters;
 mod dbus_interface;
 mod event_log;
 mod glossary;
+mod inline_readings;
 mod jmdict_index;
 mod kana;
 mod morphology;
