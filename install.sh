@@ -4,10 +4,11 @@
 #   curl -fsSL https://raw.githubusercontent.com/vcanonici/gnome-furigana/main/install.sh | bash
 #   ./install.sh [options]            # from a release directory or a source checkout
 #
-# Installs for the current user only: the linguistic service (Rust binary, D-Bus
-# activated), the GNOME Shell extension, its GSettings schema and, when present,
-# the Settings app with the "Furigana" panel. sudo is used only for apt packages.
-# Nothing under /usr/share/locale is modified. Changes take effect at next login.
+# Per user: the linguistic service (Rust binary, D-Bus activated), the GNOME Shell
+# extension, its GSettings schema and, when present, the Settings app with the
+# "Furigana" panel. With sudo (skip with --no-system): annotated gettext catalogs
+# `ja@furigana` for every GTK/gettext app, rebuilt after each apt run. Original
+# catalogs are never modified. Changes take effect at next login.
 #
 # Exit codes: 0 ok · 1 failure · 2 invalid usage · 3 unsupported system.
 set -euo pipefail
@@ -26,6 +27,12 @@ readonly MANIFEST="$APP_DATA/install-manifest"
 readonly STATE_FILE="$APP_DATA/install-state"
 readonly BACKUP_DIR="$APP_DATA/backup"
 readonly RESTORE_LIST="$APP_DATA/restore-list"
+readonly SYSTEM_MANIFEST="$APP_DATA/system-manifest"
+readonly SYSTEM_LIB="/usr/local/lib/gnome-furigana"
+readonly CATALOG_DIR="/usr/share/locale-langpack/ja@furigana"
+readonly APT_HOOK="/etc/apt/apt.conf.d/99gnome-furigana"
+readonly PAM_ENVIRONMENT="$HOME/.pam_environment"
+readonly FURIGANA_LANGUAGE="ja@furigana"
 
 OPT_YES=0
 OPT_VERSION="latest"
@@ -35,6 +42,8 @@ OPT_JMDICT=1
 OPT_SETTINGS_PANEL=1
 OPT_APT=1
 OPT_FORCE=0
+OPT_SYSTEM=1
+OPT_SETTINGS_FOLLOW_SESSION=0
 WORK_DIR=""
 
 usage() {
@@ -47,7 +56,10 @@ Uso: install.sh [opções]
   --language ja|keep    trocar a sessão para japonês ou manter (padrão: perguntar)
   --no-jmdict           não baixar o dicionário JMdict (traduções só do glossário)
   --no-settings-panel   não instalar o painel Furigana nas Configurações
-  --no-apt              não instalar pacotes apt (sem sudo)
+  --no-apt              não instalar pacotes apt
+  --no-system           sem sudo: não gerar catálogos ja@furigana (apps GTK sem furigana)
+  --settings-follow-session  remover de um atalho próprio das Configurações o forçar
+                        de idioma (env LANG=…), para elas seguirem a sessão
   --force               continuar mesmo fora de Ubuntu 24.04 / GNOME 46
   -h, --help            esta ajuda
 EOF
@@ -67,6 +79,8 @@ parse_args() {
             --no-jmdict) OPT_JMDICT=0 ;;
             --no-settings-panel) OPT_SETTINGS_PANEL=0 ;;
             --no-apt) OPT_APT=0 ;;
+            --no-system) OPT_SYSTEM=0 ;;
+            --settings-follow-session) OPT_SETTINGS_FOLLOW_SESSION=1 ;;
             --force) OPT_FORCE=1 ;;
             -h|--help) usage; exit 0 ;;
             *) usage >&2; die "opção desconhecida: $1" 2 ;;
@@ -250,18 +264,74 @@ install_settings_panel() {
 # is not ours is backed up for uninstall.sh and used as the base, so wrappers such as
 # `Exec=env LANG=… gnome-control-center` are kept and only the command is swapped.
 override_launcher() {
-    local base="$1" user_file="$2" binary="$3"
+    local base="$1" user_file="$2" binary="$3" saved
+    saved="$BACKUP_DIR/$(basename "$user_file")"
     if [[ -f "$user_file" ]] && ! grep -q "gnome-furigana" "$user_file"; then
-        install -d "$BACKUP_DIR"
-        cp -p "$user_file" "$BACKUP_DIR/$(basename "$user_file")"
-        printf '%s\n' "$user_file" >> "$RESTORE_LIST"
-        base="$BACKUP_DIR/$(basename "$user_file")"
+        backup_user_file "$user_file"
         log "seu $(basename "$user_file") foi preservado (backup em $BACKUP_DIR)"
-    elif [[ -f "$BACKUP_DIR/$(basename "$user_file")" ]]; then
-        base="$BACKUP_DIR/$(basename "$user_file")"
     fi
+    [[ -f "$saved" ]] && base="$saved"
     sed -E "s#^(Exec=(.*[ ])?)(/usr/bin/)?gnome-control-center( |\$)#\1$binary\4#" "$base" > "$user_file"
+    if ((OPT_SETTINGS_FOLLOW_SESSION)); then
+        # Drops `env VAR=value …` wrappers so Settings follows the session language.
+        sed -i -E 's#^Exec=env ([A-Za-z_]+=[^ ]+ )+#Exec=#' "$user_file"
+    fi
     record "$user_file"
+}
+
+# Saves a user file once, before our first change, for uninstall.sh. A file that did
+# not exist gets an `.absent` marker, so a reinstall never mistakes our version for
+# the user's.
+backup_user_file() {
+    local path="$1" saved
+    saved="$BACKUP_DIR/$(basename "$path")"
+    [[ -e "$saved" || -e "$saved.absent" ]] && return
+    install -d "$BACKUP_DIR"
+    if [[ -f "$path" ]]; then
+        cp -p "$path" "$saved"
+    else
+        printf '%s\n' "$path" > "$saved.absent"
+    fi
+    printf '%s\n' "$path" >> "$RESTORE_LIST"
+}
+
+# Puts ja@furigana first in the session's LANGUAGE (read by PAM at login). glibc then
+# takes annotated messages from it and everything else from plain `ja`.
+configure_furigana_language() {
+    local current_list
+    if [[ "$(current_language)" != ja* ]]; then
+        log "sessão não está em japonês: catálogos com furigana não ativados"
+        return
+    fi
+    current_list="$(sed -n 's/^LANGUAGE[[:space:]]\+DEFAULT=//p' "$PAM_ENVIRONMENT" 2>/dev/null | head -n1)"
+    if [[ ":$current_list:" == *":$FURIGANA_LANGUAGE:"* ]]; then
+        log "sessão: $FURIGANA_LANGUAGE já ativo"
+        return
+    fi
+    backup_user_file "$PAM_ENVIRONMENT"
+    local new_list="$FURIGANA_LANGUAGE:${current_list:-ja}"
+    if grep -q '^LANGUAGE[[:space:]]' "$PAM_ENVIRONMENT" 2>/dev/null; then
+        sed -i -E "s#^LANGUAGE[[:space:]]+DEFAULT=.*#LANGUAGE\tDEFAULT=$new_list#" "$PAM_ENVIRONMENT"
+    else
+        printf 'LANGUAGE\tDEFAULT=%s\n' "$new_list" >> "$PAM_ENVIRONMENT"
+    fi
+    log "sessão: LANGUAGE=$new_list a partir do próximo login"
+}
+
+# Root-owned copy of the binary (root never runs the user-writable one), catalogs and
+# an apt hook that refreshes them after package changes.
+install_system_catalogs() {
+    if ((!OPT_SYSTEM)); then
+        log "catálogos ja@furigana: ignorados (--no-system)"
+        return
+    fi
+    log "catálogos com furigana para os apps GTK → $CATALOG_DIR (pede a senha de sudo)"
+    sudo install -d -o root -g root -m 0755 "$SYSTEM_LIB"
+    sudo install -o root -g root -m 0755 "$RELEASE_DIR/bin/gnome-furigana" "$SYSTEM_LIB/gnome-furigana"
+    printf 'DPkg::Post-Invoke { "if [ -x %s/gnome-furigana ]; then %s/gnome-furigana build-catalogs --quiet || true; fi"; };\n' \
+        "$SYSTEM_LIB" "$SYSTEM_LIB" | sudo tee "$APT_HOOK" > /dev/null
+    printf '%s\n' "$SYSTEM_LIB" "$CATALOG_DIR" "$APT_HOOK" > "$SYSTEM_MANIFEST"
+    sudo "$SYSTEM_LIB/gnome-furigana" build-catalogs --quiet || warn "alguns catálogos falharam; os demais foram gerados"
 }
 
 current_language() {
@@ -300,6 +370,8 @@ main() {
     install_extension
     install_settings_panel
     configure_language
+    configure_furigana_language
+    install_system_catalogs
     cp "$RELEASE_DIR/VERSION" "$APP_DATA/VERSION"
     log "pronto: versão $(cat "$APP_DATA/VERSION"). Encerre a sessão e entre de novo para ativar."
 }

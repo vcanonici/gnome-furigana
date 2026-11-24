@@ -128,7 +128,9 @@ fn build_catalogs(
         excluded: exclude.unwrap_or_else(|| DEFAULT_EXCLUDED.map(str::to_owned).to_vec()).into_iter().collect(),
         dry_run,
     };
-    let mut analyzer = load_analyzer()?;
+    // Runs as root from the apt hook: never read a user's files.
+    let glossary = Glossary::curated_only().map_err(|error| error.to_string())?;
+    let mut analyzer = Analyzer::new(MorphologicalAnalyzer::new().map_err(|error| error.to_string())?, glossary);
     let report = catalog::catalog_build::build_catalogs(&mut analyzer, &options).map_err(|error| error.to_string())?;
     event_log::log_event(
         "catalog",

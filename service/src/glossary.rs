@@ -120,6 +120,16 @@ impl Glossary {
         Ok(Self { overrides, curated, jmdict: JmdictIndex::open(&data_dir.join("jmdict.sqlite")) })
     }
 
+    /// Only the embedded curated glossary: no user files, no dictionary. Used when
+    /// building system catalogs as root, which must not read a user's overrides.
+    ///
+    /// # Errors
+    /// Fails only if the embedded glossary is malformed (caught by tests).
+    pub fn curated_only() -> Result<Self, GlossaryLoadError> {
+        let curated = parse_glossary(CURATED_GLOSSARY, "ui-glossary-pt_BR.tsv", Source::Glossary)?;
+        Ok(Self { overrides: HashMap::new(), curated, jmdict: None })
+    }
+
     /// Builds a glossary from explicit tables (tests only).
     #[cfg(test)]
     #[must_use]
