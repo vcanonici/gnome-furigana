@@ -96,7 +96,12 @@ impl Analyzer {
         })
     }
 
-    fn token(&self, word: Morpheme) -> Token {
+    fn token(&self, mut word: Morpheme) -> Token {
+        // Reviewed readings (curated glossary, user overrides) beat the dictionary for
+        // unconjugated words: 空 in UI text is から, not うつろ.
+        if let Some(reading) = self.reviewed_reading(&word) {
+            word.reading = reading;
+        }
         let annotate = has_kanji(&word.surface);
         let segments = if annotate { align(&word.surface, &word.reading) } else { align(&word.surface, "") };
         let is_read = segments.iter().any(|segment| segment.reading.is_some());
@@ -114,6 +119,13 @@ impl Analyzer {
             lemma: word.lemma,
             meaning,
         }
+    }
+
+    fn reviewed_reading(&self, word: &Morpheme) -> Option<String> {
+        if word.surface != word.lemma || !has_kanji(&word.surface) {
+            return None;
+        }
+        self.glossary.lookup_curated(&word.surface)?.reading
     }
 }
 
@@ -171,7 +183,7 @@ fn merge_compounds(words: &[Morpheme], glossary: &Glossary) -> Vec<Morpheme> {
             .rev()
             .find(|&length| is_curated_compound(&words[index..index + length], glossary))
             .unwrap_or(1);
-        merged.push(if span == 1 { words[index].clone() } else { join_words(&words[index..index + span]) });
+        merged.push(if span == 1 { words[index].clone() } else { join_words(&words[index..index + span], glossary) });
         index += span;
     }
     merged
@@ -185,10 +197,13 @@ fn concat_surfaces(words: &[Morpheme]) -> String {
     words.iter().map(|word| word.surface.as_str()).collect()
 }
 
-fn join_words(words: &[Morpheme]) -> Morpheme {
+/// Joins words into one compound. The curated reading wins over the concatenation:
+/// a dictionary that splits 土曜|日 cannot apply the rendaku of 土曜日 (どようび).
+fn join_words(words: &[Morpheme], glossary: &Glossary) -> Morpheme {
     let surface = concat_surfaces(words);
+    let curated_reading = glossary.lookup_curated(&surface).and_then(|entry| entry.reading);
     Morpheme {
-        reading: words.iter().map(|word| word.reading.as_str()).collect(),
+        reading: curated_reading.unwrap_or_else(|| words.iter().map(|word| word.reading.as_str()).collect()),
         lemma: surface.clone(),
         part_of_speech: words.last().map(|word| word.part_of_speech.clone()).unwrap_or_default(),
         start: words.first().map_or(0, |word| word.start),
@@ -257,6 +272,18 @@ mod tests {
     fn inline_rendering_keeps_text_between_words() {
         let analysis = analyzer().analyze("11月24日 16:59").unwrap();
         assert_eq!(analysis.display_inline, "11月(じゅういちがつ)24日(にじゅうよっか) 16:59");
+    }
+
+    #[test]
+    fn reviewed_readings_win_for_single_words() {
+        let analysis = analyzer().analyze("パレットが空なので").unwrap();
+        assert!(analysis.display_inline.contains("空(から)"), "{}", analysis.display_inline);
+    }
+
+    #[test]
+    fn curated_compounds_carry_their_reviewed_reading() {
+        let analysis = analyzer().analyze("土曜日").unwrap();
+        assert_eq!(analysis.display_inline, "土曜日(どようび)");
     }
 
     #[test]

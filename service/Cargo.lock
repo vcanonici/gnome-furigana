@@ -873,15 +873,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lindera-ipadic"
-version = "7.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb8575fc24cc127ff02d6256155b1ce61b1d8e7fb21bf70eedf26ae5e998f768"
-dependencies = [
- "lindera-dictionary",
-]
-
-[[package]]
 name = "lindera-segmenter"
 version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -889,7 +880,7 @@ checksum = "88d2cc4e142ff378326548dc5afdb3ef064c40cfd888f0e2e12805e0793e14f1"
 dependencies = [
  "anyhow",
  "lindera-dictionary",
- "lindera-ipadic",
+ "lindera-unidic",
  "log",
  "percent-encoding",
  "serde",
@@ -897,6 +888,15 @@ dependencies = [
  "strum",
  "strum_macros",
  "url",
+]
+
+[[package]]
+name = "lindera-unidic"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b3ccbf0beab636538cb4ce839350d579c0ae2d9153d037de6637880ed877431"
+dependencies = [
+ "lindera-dictionary",
 ]
 
 [[package]]
