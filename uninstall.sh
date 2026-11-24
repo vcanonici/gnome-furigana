@@ -12,6 +12,8 @@ readonly DATA_HOME
 readonly APP_DATA="$DATA_HOME/gnome-furigana"
 readonly MANIFEST="$APP_DATA/install-manifest"
 readonly STATE_FILE="$APP_DATA/install-state"
+readonly BACKUP_DIR="$APP_DATA/backup"
+readonly RESTORE_LIST="$APP_DATA/restore-list"
 OPT_YES=0
 
 log() { printf '\033[1;34m[furigana]\033[0m %s\n' "$*" >&2; }
@@ -51,6 +53,17 @@ remove_recorded_paths() {
     systemctl --user daemon-reload 2>/dev/null || true
 }
 
+# Puts back launchers the user had before install.sh overrode them.
+restore_backups() {
+    local path
+    [[ -f "$RESTORE_LIST" ]] || return 0
+    while IFS= read -r path; do
+        [[ -f "$BACKUP_DIR/$(basename "$path")" ]] || continue
+        cp -p "$BACKUP_DIR/$(basename "$path")" "$path"
+        log "restaurado: $path"
+    done < "$RESTORE_LIST"
+}
+
 restore_language() {
     local previous=""
     [[ -f "$STATE_FILE" ]] || return 0
@@ -71,6 +84,7 @@ main() {
     stop_service
     restore_language
     remove_recorded_paths
+    restore_backups
     rm -rf -- "$APP_DATA"
     log "gnome-furigana removido. Encerre a sessão para concluir."
 }

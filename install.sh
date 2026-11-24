@@ -24,6 +24,8 @@ readonly DATA_HOME CONFIG_HOME
 readonly APP_DATA="$DATA_HOME/gnome-furigana"
 readonly MANIFEST="$APP_DATA/install-manifest"
 readonly STATE_FILE="$APP_DATA/install-state"
+readonly BACKUP_DIR="$APP_DATA/backup"
+readonly RESTORE_LIST="$APP_DATA/restore-list"
 
 OPT_YES=0
 OPT_VERSION="latest"
@@ -237,12 +239,28 @@ install_settings_panel() {
     # The panel loader resolves gnome-<panel>-panel.desktop through XDG data dirs.
     install -m 0644 "$target/share/applications/gnome-furigana-panel.desktop" "$DATA_HOME/applications/"
     record "$DATA_HOME/applications/gnome-furigana-panel.desktop"
-    sed "s|^Exec=.*|Exec=$target/bin/gnome-control-center|" /usr/share/applications/org.gnome.Settings.desktop \
-        > "$DATA_HOME/applications/org.gnome.Settings.desktop"
-    record "$DATA_HOME/applications/org.gnome.Settings.desktop"
-    sed "s|^Exec=.*|Exec=$target/bin/gnome-control-center|" \
-        /usr/share/dbus-1/services/org.gnome.Settings.service > "$DATA_HOME/dbus-1/services/org.gnome.Settings.service"
-    record "$DATA_HOME/dbus-1/services/org.gnome.Settings.service"
+    override_launcher /usr/share/applications/org.gnome.Settings.desktop \
+        "$DATA_HOME/applications/org.gnome.Settings.desktop" "$target/bin/gnome-control-center"
+    override_launcher /usr/share/dbus-1/services/org.gnome.Settings.service \
+        "$DATA_HOME/dbus-1/services/org.gnome.Settings.service" "$target/bin/gnome-control-center"
+}
+
+# Points a launcher (desktop entry or D-Bus service) at the fork. A user override that
+# is not ours is backed up for uninstall.sh and used as the base, so wrappers such as
+# `Exec=env LANG=… gnome-control-center` are kept and only the command is swapped.
+override_launcher() {
+    local base="$1" user_file="$2" binary="$3"
+    if [[ -f "$user_file" ]] && ! grep -q "gnome-furigana" "$user_file"; then
+        install -d "$BACKUP_DIR"
+        cp -p "$user_file" "$BACKUP_DIR/$(basename "$user_file")"
+        printf '%s\n' "$user_file" >> "$RESTORE_LIST"
+        base="$BACKUP_DIR/$(basename "$user_file")"
+        log "seu $(basename "$user_file") foi preservado (backup em $BACKUP_DIR)"
+    elif [[ -f "$BACKUP_DIR/$(basename "$user_file")" ]]; then
+        base="$BACKUP_DIR/$(basename "$user_file")"
+    fi
+    sed -E "s#^(Exec=(.*[ ])?)(/usr/bin/)?gnome-control-center( |\$)#\1$binary\4#" "$base" > "$user_file"
+    record "$user_file"
 }
 
 current_language() {
