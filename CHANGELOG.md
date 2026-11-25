@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1 — painel das Configurações e instalação a partir do código
+
+- **Configurações não travam mais no painel Furigana**: chaves ausentes no schema escondem a
+  linha em vez de abortar (fork e extensão de versões diferentes).
+- **Instalação `--source` sem fork**: o fork e o atalho de uma instalação anterior (que forçava
+  `LANG=en_US`) são removidos e o atalho do usuário restaurado; `--settings-follow-session` vale
+  para ele. Com o pacote do release o fork é sempre atualizado.
+- **Gate de CPU** nos testes de aceitação: Shell ocioso com a extensão ≤ 5% de um núcleo.
+- Build do cargo usa o rustup (`rust-toolchain.toml`) mesmo fora do PATH.
+- Release publicado como versão normal; execução manual do workflow gera só o artefato.
+
 ## 0.2.0 — furigana em todo o sistema
 
 - **Apps GTK/gettext** (Configurações, Arquivos, GTK, libadwaita…): catálogos `ja@furigana`
