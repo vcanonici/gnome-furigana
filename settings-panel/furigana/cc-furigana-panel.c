@@ -105,27 +105,50 @@ seconds_to_milliseconds (const GValue *value, const GVariantType *type, gpointer
   return g_variant_new_uint32 ((guint32) (g_value_get_double (value) * 1000.0 + 0.5));
 }
 
+static gboolean
+settings_has_key (GSettings *settings, const gchar *key)
+{
+  g_autoptr(GSettingsSchema) schema = NULL;
+
+  g_object_get (settings, "settings-schema", &schema, NULL);
+  return schema != NULL && g_settings_schema_has_key (schema, key);
+}
+
+/* Binds a row property to a key. A key missing from the installed schema (extension and
+ * panel of different versions) hides the row: GSettings aborts the whole app otherwise. */
+static void
+bind_row (CcFuriganaPanel *self, const gchar *key, gpointer row, const gchar *property, GSettingsBindFlags flags,
+          GSettingsBindGetMapping get_mapping, GSettingsBindSetMapping set_mapping, gpointer user_data)
+{
+  if (!settings_has_key (self->settings, key))
+    {
+      g_warning ("furigana: schema has no key '%s'; hiding its row", key);
+      gtk_widget_set_visible (GTK_WIDGET (row), FALSE);
+      return;
+    }
+  g_settings_bind_with_mapping (self->settings, key, row, property, flags, get_mapping, set_mapping, user_data,
+                                NULL);
+}
+
 static void
 bind_combo (CcFuriganaPanel *self, const gchar *key, AdwComboRow *row, const gchar *const *nicks)
 {
-  g_settings_bind_with_mapping (self->settings, key, row, "selected", G_SETTINGS_BIND_DEFAULT,
-                                nick_to_index, index_to_nick, (gpointer) nicks, NULL);
+  bind_row (self, key, row, "selected", G_SETTINGS_BIND_DEFAULT, nick_to_index, index_to_nick, (gpointer) nicks);
 }
 
 static void
 bind_settings (CcFuriganaPanel *self)
 {
-  g_settings_bind_with_mapping (self->settings, "annotate", self->annotate_row, "active",
-                                G_SETTINGS_BIND_DEFAULT, annotate_to_active, active_to_annotate, NULL, NULL);
+  bind_row (self, "annotate", self->annotate_row, "active", G_SETTINGS_BIND_DEFAULT, annotate_to_active,
+            active_to_annotate, NULL);
   bind_combo (self, "display-form", self->form_row, FORM_NICKS);
   bind_combo (self, "hover-scope", self->scope_row, SCOPE_NICKS);
-  g_settings_bind (self->settings, "min-scale", self->scale_row, "value", G_SETTINGS_BIND_DEFAULT);
-  g_settings_bind (self->settings, "hover-enabled", self->hover_row, "active", G_SETTINGS_BIND_DEFAULT);
-  g_settings_bind_with_mapping (self->settings, "hover-delay-ms", self->delay_row, "value",
-                                G_SETTINGS_BIND_DEFAULT, milliseconds_to_seconds, seconds_to_milliseconds,
-                                NULL, NULL);
-  g_settings_bind (self->settings, "hover-enabled", self->delay_row, "sensitive", G_SETTINGS_BIND_GET);
-  g_settings_bind (self->settings, "hover-enabled", self->scope_row, "sensitive", G_SETTINGS_BIND_GET);
+  bind_row (self, "min-scale", self->scale_row, "value", G_SETTINGS_BIND_DEFAULT, NULL, NULL, NULL);
+  bind_row (self, "hover-enabled", self->hover_row, "active", G_SETTINGS_BIND_DEFAULT, NULL, NULL, NULL);
+  bind_row (self, "hover-delay-ms", self->delay_row, "value", G_SETTINGS_BIND_DEFAULT, milliseconds_to_seconds,
+            seconds_to_milliseconds, NULL);
+  bind_row (self, "hover-enabled", self->delay_row, "sensitive", G_SETTINGS_BIND_GET, NULL, NULL, NULL);
+  bind_row (self, "hover-enabled", self->scope_row, "sensitive", G_SETTINGS_BIND_GET, NULL, NULL, NULL);
 }
 
 /* --- Linguistic service status ----------------------------------------------------- */
