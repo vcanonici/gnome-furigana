@@ -2,8 +2,11 @@
  * Annotates every `St.Label` of the GNOME Shell UI (`Main.layoutManager.uiGroup`):
  * top bar, all menus and Quick Settings, the Overview (app grid, dash, search, window
  * captions), dialogs, notifications and the calendar. Only labels are touched;
- * editable text (`St.Entry`) and our own actors are skipped. Unmapped subtrees are not
- * walked, so hidden UI costs nothing.
+ * editable text (`St.Entry`) and our own actors are skipped.
+ *
+ * Cost per frame is kept near zero: labels are found by a sliced walk (`LabelScanner`),
+ * only labels drawing ruby are repositioned, and the overlay is raised only when a new
+ * actor joins the `uiGroup`.
  */
 
 import Clutter from 'gi://Clutter';
@@ -15,12 +18,13 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {AnnotatedLabel, type WordHit} from './annotatedLabel.js';
 import type {FuriganaPreferences} from './furiganaSettings.js';
 import type {HoverController} from './hoverController.js';
+import {LabelScanner} from './labelScanner.js';
 import type {LinguisticClient} from './linguisticClient.js';
 
 // CJK ideographs incl. extension A, compatibility and 々; cheap pre-filter before D-Bus.
 const KANJI = /[㐀-䶿一-鿿豈-﫿々]|[\ud840-\ud87f][\udc00-\udfff]/u;
-// Menus and the Overview add labels lazily; a periodic walk of mapped actors catches them.
-const RESCAN_INTERVAL_MS = 750;
+// Menus and the Overview show labels lazily; a periodic sliced walk catches them.
+const RESCAN_INTERVAL_MS = 1000;
 /** Name prefix of our own actors (overlay, tooltip), which must never be annotated. */
 export const OWN_ACTOR_PREFIX = 'furigana-';
 const SERVICE_CONTEXT = 'shell';
@@ -42,10 +46,17 @@ export class ShellLabelAnnotator {
     private readonly overviewSignal: number;
     private readonly rescanSource: number;
     private readonly laterId: number;
+    private readonly childAddedSignal: number;
+    private readonly scanner: LabelScanner;
 
     constructor(private readonly client: LinguisticClient, private readonly hover: HoverController,
         private preferences: FuriganaPreferences) {
-        Main.layoutManager.uiGroup.add_child(this.overlay);
+        const uiGroup = Main.layoutManager.uiGroup;
+        uiGroup.add_child(this.overlay);
+        this.scanner = new LabelScanner(uiGroup, actor => this.isExcluded(actor), label => { this.track(label); });
+        // Menus and dialogs created after us are stacked above; furigana must stay on top.
+        // Raising on every frame instead fights other actors and redraws forever.
+        this.childAddedSignal = uiGroup.connect('child-added', () => { this.raiseOverlay(); });
         // Pointer motion comes from the cursor tracker: an open menu grabs input, and
         // during a grab the stage receives no events, so stage signals would miss hovers.
         this.cursorSignal = this.cursorTracker.connect('position-invalidated', () => { this.handlePointerMoved(); });
@@ -53,17 +64,17 @@ export class ShellLabelAnnotator {
             this.handleEvent(event);
             return Clutter.EVENT_PROPAGATE;
         });
-        this.overviewSignal = overview().connect('showing', () => { this.scan(); });
+        this.overviewSignal = overview().connect('showing', () => { this.scanner.request(); });
         // Default priority: a low-priority source can starve while the Shell keeps redrawing.
         this.rescanSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, RESCAN_INTERVAL_MS, () => {
-            this.scan();
+            this.scanner.request();
             return GLib.SOURCE_CONTINUE;
         });
         this.laterId = global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
             this.syncPositions();
             return GLib.SOURCE_CONTINUE;
         });
-        this.scan();
+        this.scanner.request();
     }
 
     /** Re-renders every label with new preferences. */
@@ -76,6 +87,8 @@ export class ShellLabelAnnotator {
     /** Removes all decorations, restores texts and disconnects (spec CA-F07). */
     destroy(): void {
         GLib.source_remove(this.rescanSource);
+        this.scanner.cancel();
+        Main.layoutManager.uiGroup.disconnect(this.childAddedSignal);
         global.compositor.get_laters().remove(this.laterId);
         global.stage.disconnect(this.eventSignal);
         this.cursorTracker.disconnect(this.cursorSignal);
@@ -89,15 +102,19 @@ export class ShellLabelAnnotator {
         this.overlay.destroy();
     }
 
-    private scan(): void {
-        for (const label of findMappedLabels(Main.layoutManager.uiGroup)) {
-            if (this.labels.has(label) || !KANJI.test(label.text))
-                continue;
-            const annotated = new AnnotatedLabel(label, this.overlay, changed => void this.annotate(changed));
-            this.labels.set(label, annotated);
-            this.destroySignals.set(label, label.connect('destroy', () => { this.forget(label); }));
-            void this.annotate(annotated);
-        }
+    private isExcluded(actor: Clutter.Actor): boolean {
+        // Typed as string upstream, but null for actors that were never named.
+        const name = actor.name as string | null;
+        return actor === global.window_group || (name?.startsWith(OWN_ACTOR_PREFIX) ?? false);
+    }
+
+    private track(label: St.Label): void {
+        if (this.labels.has(label) || !KANJI.test(label.text))
+            return;
+        const annotated = new AnnotatedLabel(label, this.overlay, changed => void this.annotate(changed));
+        this.labels.set(label, annotated);
+        this.destroySignals.set(label, label.connect('destroy', () => { this.forget(label); }));
+        void this.annotate(annotated);
     }
 
     private forget(label: St.Label): void {
@@ -119,13 +136,18 @@ export class ShellLabelAnnotator {
             annotated.apply(analysis, this.preferences);
     }
 
-    private syncPositions(): void {
-        // Menus and dialogs created after us are stacked above; furigana must stay on top.
+    private raiseOverlay(): void {
         const uiGroup = Main.layoutManager.uiGroup;
         if (uiGroup.get_last_child() !== this.overlay)
             uiGroup.set_child_above_sibling(this.overlay, null);
-        for (const annotated of this.labels.values())
-            annotated.syncPosition();
+    }
+
+    /** Runs before every redraw: touches only labels that draw ruby. */
+    private syncPositions(): void {
+        for (const annotated of this.labels.values()) {
+            if (annotated.hasRuby)
+                annotated.syncPosition();
+        }
     }
 
     private handlePointerMoved(): void {
@@ -148,35 +170,4 @@ export class ShellLabelAnnotator {
         }
         return null;
     }
-}
-
-/** The placeholder label of an entry (e.g. 検索ワードを入力); its typed text is never touched. */
-function entryHint(entry: St.Entry): St.Label | null {
-    const hint = entry.get_hint_actor();
-    return hint instanceof St.Label && hint.mapped ? hint : null;
-}
-
-/**
- * Depth-first list of mapped `St.Label`s. Skips unmapped subtrees (hidden UI), our own
- * actors and editable text; of an entry only its placeholder is annotated.
- */
-function findMappedLabels(root: Clutter.Actor): St.Label[] {
-    const found: St.Label[] = [];
-    const pending: Clutter.Actor[] = [root];
-    for (let actor = pending.pop(); actor; actor = pending.pop()) {
-        // Typed as string upstream, but null for actors that were never named.
-        const name = actor.name as string | null;
-        if (!actor.mapped || name?.startsWith(OWN_ACTOR_PREFIX))
-            continue;
-        if (actor instanceof St.Entry) {
-            const hint = entryHint(actor);
-            if (hint)
-                found.push(hint);
-            continue;
-        }
-        if (actor instanceof St.Label)
-            found.push(actor);
-        pending.push(...actor.get_children());
-    }
-    return found;
 }
