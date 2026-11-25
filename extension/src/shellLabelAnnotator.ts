@@ -5,7 +5,7 @@
  * editable text (`St.Entry`) and our own actors are skipped.
  *
  * Cost per frame is kept near zero: labels are found by a sliced walk (`LabelScanner`),
- * only labels drawing ruby are repositioned, and the overlay is raised only when a new
+ * only labels drawing ruby are repositioned (on frames that happen anyway), and the overlay is raised only when a new
  * actor joins the `uiGroup`.
  */
 
@@ -45,7 +45,7 @@ export class ShellLabelAnnotator {
     private readonly cursorSignal: number;
     private readonly overviewSignal: number;
     private readonly rescanSource: number;
-    private readonly laterId: number;
+    private readonly beforeUpdateSignal: number;
     private readonly childAddedSignal: number;
     private readonly scanner: LabelScanner;
 
@@ -70,10 +70,9 @@ export class ShellLabelAnnotator {
             this.scanner.request();
             return GLib.SOURCE_CONTINUE;
         });
-        this.laterId = global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
-            this.syncPositions();
-            return GLib.SOURCE_CONTINUE;
-        });
+        // A stage signal runs only when a frame happens anyway. A persistent BEFORE_REDRAW
+        // later would make mutter schedule a new frame forever (~50% of a core when idle).
+        this.beforeUpdateSignal = global.stage.connect('before-update', () => { this.syncPositions(); });
         this.scanner.request();
     }
 
@@ -89,7 +88,7 @@ export class ShellLabelAnnotator {
         GLib.source_remove(this.rescanSource);
         this.scanner.cancel();
         Main.layoutManager.uiGroup.disconnect(this.childAddedSignal);
-        global.compositor.get_laters().remove(this.laterId);
+        global.stage.disconnect(this.beforeUpdateSignal);
         global.stage.disconnect(this.eventSignal);
         this.cursorTracker.disconnect(this.cursorSignal);
         overview().disconnect(this.overviewSignal);
@@ -122,7 +121,7 @@ export class ShellLabelAnnotator {
         if (annotated) {
             // Other labels disappear all the time (notifications expire): keep their hover.
             this.hover.forgetLabel(annotated.id);
-            annotated.destroy();
+            annotated.detach();
         }
         this.labels.delete(label);
         this.destroySignals.delete(label);

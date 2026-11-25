@@ -135,6 +135,15 @@ export class AnnotatedLabel {
         this.label.disconnect(this.textSignal);
     }
 
+    /**
+     * Removes decorations of a label that is being destroyed. Its inner `Clutter.Text`
+     * may already be gone, so the text is left alone (writing it logs CRITICALs).
+     */
+    detach(): void {
+        this.isTextReplaced = false;
+        this.clear();
+    }
+
     private applyWhenMapped(analysis: Analysis, preferences: FuriganaPreferences): void {
         this.mappedSignal = this.label.connect('notify::mapped', () => {
             if (this.label.mapped)
