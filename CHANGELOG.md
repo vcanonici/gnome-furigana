@@ -10,6 +10,10 @@
 - **Leituras melhores**: UniDic (NINJAL) no lugar do IPADIC (行 ぎょう, 正しく ただしく, 値 あたい…);
   leituras revisadas do glossário têm prioridade; datas e contadores (11月 じゅういちがつ, 24日 にじゅうよっか).
 - **Instalação autocontida**: JMdict versionado no repo e índice pronto no release.
+- **Desempenho**: o Shell ocioso ficava em ~50–100% de um núcleo (um later `BEFORE_REDRAW`
+  persistente forçava um frame atrás do outro). Agora a sincronização roda no `before-update` do
+  stage, escreve só o que mudou e a varredura de rótulos é fatiada: ~0% ocioso.
+- Cartão de tradução de datas: `25日` → "dia 25", `11月` → "novembro".
 - Instalador: `LANGUAGE=ja@furigana` via `~/.pam_environment`, `--settings-follow-session`,
   `--no-system`; remove a extensão de `disabled-extensions`; backups com restauração exata.
 
