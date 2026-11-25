@@ -20,6 +20,10 @@ readonly EXTENSIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extens
 # real database clobbers settings and destabilises Shell startup.
 readonly TEST_DCONF_DB="furigana_acceptance"  # becomes a D-Bus path element: no hyphens
 FAILURES=0
+# An idle Shell with the extension must stay cool: a per-frame hook that forces redraws
+# once cost 50-100% of a core. Measured with no menu, Overview or pointer activity.
+readonly IDLE_CPU_MAX_PERCENT=5
+readonly IDLE_SAMPLE_SECONDS=10
 
 log() { printf '[acceptance] %s\n' "$*" >&2; }
 
@@ -60,6 +64,15 @@ check() {
         log "FAIL $name: expected $expected, got $actual"
         FAILURES=$((FAILURES + 1))
     fi
+}
+
+# CPU time of the test Shell over IDLE_SAMPLE_SECONDS, in percent of one core.
+idle_cpu_percent() {
+    local before after
+    before="$(awk '{print $14 + $15}' "/proc/$SHELL_PID/stat")"
+    sleep "$IDLE_SAMPLE_SECONDS"
+    after="$(awk '{print $14 + $15}' "/proc/$SHELL_PID/stat")"
+    printf '%s\n' $(((after - before) * 100 / ($(getconf CLK_TCK) * IDLE_SAMPLE_SECONDS)))
 }
 
 screenshot() {
@@ -157,7 +170,13 @@ run_scenarios() {
         "$(shell_eval 'furiganaProbe.withoutReading()')" '[]'
     screenshot overview
     shell_eval 'furiganaProbe.hideOverview()' > /dev/null
-    sleep 1
+    sleep 2
+
+    local idle_cpu
+    idle_cpu="$(idle_cpu_percent)"
+    log "idle Shell CPU: ${idle_cpu}% of one core"
+    check "idle Shell CPU at most ${IDLE_CPU_MAX_PERCENT}% of one core" \
+        "$((idle_cpu <= IDLE_CPU_MAX_PERCENT))" 1
 
     shell_eval "Main.extensionManager.disableExtension('$UUID')" > /dev/null
     sleep 1
