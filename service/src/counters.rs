@@ -5,6 +5,7 @@
 //! word whose reading comes from explicit tables: day-of-month readings are irregular
 //! (1日 ついたち, 20日 はつか, 24日 にじゅうよっか) and must not be computed.
 
+use crate::glossary::{Entry, Source};
 use crate::morphology::Morpheme;
 
 /// じゅういちがつ etc. for months 1–12.
@@ -56,6 +57,22 @@ const DAYS: [&str; 31] = [
     "にじゅうくにち",
     "さんじゅうにち",
     "さんじゅういちにち",
+];
+
+/// Month names in pt-BR, January first.
+const MONTH_NAMES_PT: [&str; 12] = [
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
 ];
 
 /// Counters whose reading does not depend on the number (no sound changes).
@@ -111,6 +128,28 @@ fn resolve_pair(number: &Morpheme, counter: &Morpheme) -> Option<Vec<Morpheme>> 
     Some(vec![number.clone(), Morpheme { reading: (*reading).to_owned(), ..counter.clone() }])
 }
 
+/// pt-BR meaning of a merged month or day word (`11月` → novembro, `25日` → dia 25).
+/// Computed from the same tables as the reading, so it exists exactly when the word
+/// was merged here and no dictionary has an entry for it.
+#[must_use]
+pub fn counter_meaning(surface: &str, reading: &str) -> Option<Entry> {
+    let counter = surface.chars().last()?;
+    let value = parse_number(surface.strip_suffix(counter)?)?;
+    let gloss = match counter {
+        '月' => (*MONTH_NAMES_PT.get(value.checked_sub(1)?)?).to_owned(),
+        '日' if (1..=DAYS.len()).contains(&value) => format!("dia {value}"),
+        _ => return None,
+    };
+    Some(Entry {
+        term: surface.to_owned(),
+        reading: Some(reading.to_owned()),
+        glosses: vec![gloss],
+        part_of_speech: Some("substantivo".to_owned()),
+        source: Source::Glossary,
+        language: "pt-BR",
+    })
+}
+
 /// Applies counter readings to a morpheme sequence.
 #[must_use]
 pub fn apply_counter_readings(words: &[Morpheme]) -> Vec<Morpheme> {
@@ -162,6 +201,15 @@ mod tests {
     fn regular_counters_fix_only_the_counter_reading() {
         let words = readings("2026年");
         assert_eq!(words.last().unwrap(), &("年".to_owned(), "ねん".to_owned()));
+    }
+
+    #[test]
+    fn month_and_day_words_have_a_portuguese_meaning() {
+        let gloss = |surface: &str| counter_meaning(surface, "").map(|entry| entry.glosses[0].clone());
+        assert_eq!(gloss("25日").as_deref(), Some("dia 25"));
+        assert_eq!(gloss("11月").as_deref(), Some("novembro"));
+        assert_eq!(gloss("１日").as_deref(), Some("dia 1"));
+        assert_eq!((gloss("13月"), gloss("32日"), gloss("日")), (None, None, None));
     }
 
     #[test]
