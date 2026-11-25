@@ -37,10 +37,17 @@ jobs:
           path: build/settings
       - name: Stage release
         run: chmod +x build/settings/bin/* && SETTINGS_FORK_DIR="$PWD/build/settings" packaging/stage-release.sh
+      # A manual run (workflow_dispatch) on a branch stops here: the exact package is kept
+      # as an artifact for a VM test before anything is published.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: dist/gnome-furigana-*-x86_64.tar.gz*
       - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" --title "gnome-furigana $version" --notes-file CHANGELOG.md --prerelease \
+          gh release create "$GITHUB_REF_NAME" --title "gnome-furigana $version" --notes-file CHANGELOG.md \
             dist/gnome-furigana-*-x86_64.tar.gz dist/gnome-furigana-*-x86_64.tar.gz.sha256
