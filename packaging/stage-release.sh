@@ -16,9 +16,28 @@ readonly JMDICT_SHA256="8bac55a4fd3ea2b103348ced2098a61165a73aaea45754e6535057c7
 
 log() { printf '[stage-release] %s\n' "$*" >&2; }
 
+# Cargo that honours rust-toolchain.toml. Ubuntu's apt cargo (1.75) cannot read the
+# 2024 edition, and rustup's ~/.cargo/bin is often missing from PATH in login shells.
+find_cargo() {
+    local channel candidate
+    channel="$(sed -n 's/^channel = "\(.*\)"/\1/p' "$REPO_ROOT/service/rust-toolchain.toml")"
+    for candidate in "${CARGO:-}" "${CARGO_HOME:-$HOME/.cargo}/bin/cargo" "$(command -v cargo || true)"; do
+        [[ -n "$candidate" && -x "$candidate" ]] || continue
+        if (cd "$REPO_ROOT/service" && "$candidate" --version 2>/dev/null) | grep -qF "cargo $channel"; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    log "Rust $channel não encontrado. Instale o rustup: curl https://sh.rustup.rs -sSf | sh"
+    return 1
+}
+
 build_components() {
     log "building service (release)"
-    cargo build --quiet --release --locked --manifest-path "$REPO_ROOT/service/Cargo.toml"
+    local cargo
+    cargo="$(find_cargo)"
+    # rustup picks the toolchain from the working directory, so build from service/.
+    (cd "$REPO_ROOT/service" && "$cargo" build --quiet --release --locked)
     log "packaging extension"
     node "$REPO_ROOT/extension/scripts/packageExtension.mjs" >/dev/null
 }
