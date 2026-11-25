@@ -93,18 +93,23 @@ export class AnnotatedLabel {
         this.createRuby(analysis, this.decision.scale);
     }
 
-    /** Moves ruby actors to follow the label (menus animate and re-layout). */
+    /** True while this label draws ruby actors that must follow it. */
+    get hasRuby(): boolean {
+        return this.rubyActors.length > 0;
+    }
+
+    /**
+     * Moves ruby actors to follow the label (menus animate and re-layout). Runs before
+     * every redraw, so it writes only what changed: any write queues another redraw.
+     */
     syncPosition(): void {
-        const isVisible = this.label.mapped && this.label.get_paint_opacity() > 0;
+        const opacity = this.label.mapped ? this.label.get_paint_opacity() : 0;
         for (const {span, actor} of this.rubyActors) {
-            const rect = isVisible ? spanRect(this.label, span.start, span.end) : null;
-            actor.visible = rect !== null;
-            if (!rect)
-                continue;
-            // Follow the label's own fade (menus and the Overview animate opacity).
-            actor.opacity = this.label.get_paint_opacity();
-            const [, , width, height] = actor.get_preferred_size();
-            actor.set_position(Math.round(rect.x + (rect.width - width) / 2), Math.round(rect.y - height * (1 - RUBY_DROP)));
+            const rect = opacity > 0 ? spanRect(this.label, span.start, span.end) : null;
+            if (actor.visible !== (rect !== null))
+                actor.visible = rect !== null;
+            if (rect)
+                placeRuby(actor, rect, opacity);
         }
     }
 
@@ -207,4 +212,15 @@ export class AnnotatedLabel {
             this.setLabelText(this.originalText);
         this.decision = null;
     }
+}
+
+/** Centres a ruby actor above its span, following the label's fade, without redundant writes. */
+function placeRuby(actor: St.Label, rect: StageRect, opacity: number): void {
+    if (actor.opacity !== opacity)
+        actor.opacity = opacity;
+    const [, , width, height] = actor.get_preferred_size();
+    const x = Math.round(rect.x + (rect.width - width) / 2);
+    const y = Math.round(rect.y - height * (1 - RUBY_DROP));
+    if (actor.x !== x || actor.y !== y)
+        actor.set_position(x, y);
 }
