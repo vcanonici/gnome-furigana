@@ -6,7 +6,7 @@ use std::sync::Arc;
 use lru::LruCache;
 
 use crate::alignment::{Segment, align};
-use crate::counters::apply_counter_readings;
+use crate::counters::{apply_counter_readings, counter_meaning};
 use crate::glossary::Glossary;
 use crate::inline_readings::{ReadingHint, render_segments, strip_inline_readings};
 use crate::kana::has_kanji;
@@ -105,7 +105,10 @@ impl Analyzer {
         let annotate = has_kanji(&word.surface);
         let segments = if annotate { align(&word.surface, &word.reading) } else { align(&word.surface, "") };
         let is_read = segments.iter().any(|segment| segment.reading.is_some());
-        let meaning = annotate.then(|| self.glossary.lookup(&word.lemma, Some(&word.reading))).flatten();
+        let meaning = annotate
+            .then(|| self.glossary.lookup(&word.lemma, Some(&word.reading)))
+            .flatten()
+            .or_else(|| counter_meaning(&word.surface, &word.reading));
         Token {
             reading: is_read.then(|| word.reading.clone()),
             part_of_speech: meaning
