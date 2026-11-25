@@ -248,6 +248,7 @@ install_settings_panel() {
     local target="$APP_DATA/settings"
     if ((!OPT_SETTINGS_PANEL)) || [[ ! -x "$RELEASE_DIR/settings/bin/gnome-control-center" ]]; then
         log "painel nas Configurações: não instalado (use as preferências da extensão)"
+        remove_stale_settings_panel
         return
     fi
     log "Configurações com painel Furigana → $target"
@@ -276,11 +277,43 @@ override_launcher() {
     fi
     [[ -f "$saved" ]] && base="$saved"
     sed -E "s#^(Exec=(.*[ ])?)(/usr/bin/)?gnome-control-center( |\$)#\1$binary\4#" "$base" > "$user_file"
-    if ((OPT_SETTINGS_FOLLOW_SESSION)); then
-        # Drops `env VAR=value …` wrappers so Settings follows the session language.
-        sed -i -E 's#^Exec=env ([A-Za-z_]+=[^ ]+ )+#Exec=#' "$user_file"
-    fi
+    follow_session_language "$user_file"
     record "$user_file"
+}
+
+# With --settings-follow-session, drops `env VAR=value …` wrappers from a launcher so
+# Settings follows the session language.
+follow_session_language() {
+    ((OPT_SETTINGS_FOLLOW_SESSION)) || return 0
+    sed -i -E 's#^Exec=env ([A-Za-z_]+=[^ ]+ )+#Exec=#' "$1"
+}
+
+# A fork left by an earlier install may read settings keys this release removed, and
+# GSettings aborts on those. Without a fork in this package, go back to the system
+# Settings: drop the fork and give the launchers back to the user (or to the system).
+remove_stale_settings_panel() {
+    local target="$APP_DATA/settings" launcher
+    [[ -d "$target" ]] || return 0
+    warn "removendo o painel das Configurações de uma instalação anterior (Configurações do sistema, sem painel)"
+    rm -rf "$target"
+    rm -f "$DATA_HOME/applications/gnome-furigana-panel.desktop"
+    for launcher in "$DATA_HOME/applications/org.gnome.Settings.desktop" \
+        "$DATA_HOME/dbus-1/services/org.gnome.Settings.service"; do
+        restore_launcher "$launcher"
+    done
+}
+
+# Puts back the user's own launcher (or none) in place of ours.
+restore_launcher() {
+    local path="$1" saved
+    saved="$BACKUP_DIR/$(basename "$path")"
+    grep -qs "gnome-furigana" "$path" || return 0
+    if [[ -f "$saved" ]]; then
+        cp -p "$saved" "$path"
+        follow_session_language "$path"
+    else
+        rm -f -- "$path"
+    fi
 }
 
 # Saves a user file once, before our first change, for uninstall.sh. A file that did
